@@ -14,12 +14,10 @@ output:
 editor_options: 
   chunk_output_type: inline
 ---
-
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(eval = TRUE, echo = TRUE, fig.align = "center", fig.width = 6, comment = ">", cache = F)
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
 ```
-
 
 # To Do List
 1. Check if I need a new shapefile for ICES areas to include area 6. Currently using same shapefile I used for Trilaterals which was focused just on the North Sea
@@ -28,8 +26,7 @@ knitr::opts_chunk$set(eval = TRUE, echo = TRUE, fig.align = "center", fig.width 
 ```{r wd}
 # rm(list = ls())
 getwd()
-
-getOption("download.file.method") # if wininet, change to auto 
+getOption("download.file.method") # wininet causes errors
 options(download.file.method = "curl")
 ```
 
@@ -40,106 +37,80 @@ pckgs <- c("icesDatras", "icesVocab", "rgdal", "ggplot2", "dplyr")
 for(pkg in pckgs){
   library(pkg, character.only = T, quietly = T)
 }
-
+getwd()
 rm(pckgs, pkg)
 ```
 
 ```{r}
-source("ibts_funs.R") # for dealing with datras data
+source(paste0(getwd(),"/Functions/dataprep_funs.R")) # for dealing with datras data
 ```
 
 # ICES Divisions and Rectangles 
 ```{r ices.rect, echo = T, eval = F}
 ### ICES Rectangles
-ices_rect2 <- readOGR(dsn = "ICES Rect/ICES_StatRec_mapto_ICES_Areas (1)", layer = "StatRec_map_Areas_Full_20170124")
+ices_rect2 <- readOGR(dsn = paste0(getwd(), "/Data/ICES Rect"), layer = "StatRec_map_Areas_Full_20170124")
 ices_rect <- makeReadableFortify(ices_rect2)
-
-ices_rect2 <- readOGR(dsn = "ICES Rect/ICES_rectangles", layer = "ICES_Statistical_Rectangles_Eco")
-ices_rect2 <- makeReadableFortify(ices_rect2)
-
 
 rm(ices_rect2)
 ```
 ```{r, save.rect, echo = F, eval = F}
-save(ices_rect, file = "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/ICES Rect/ices_rect.rds")
+save(ices_rect, file = paste0(getwd(), "/Data/ICES Rect/ices_rect.rds"))
 ```
 
 ```{r ices.divs, echo = T, eval = F}
 ### ICES Divisions
-ices_divs2 <- readOGR(dsn = "ICES Divs/ICES_areas", layer = "ICES_Areas_20160601_cut_dense_3857")
-ices_divs2 <- readOGR(dsn = "ICES North Sea Divisions", layer = "ICES_Divisons_CodHadWhgPok")
+ices_divs2 <- readOGR(dsn = paste0(getwd(), "/Data/ICES Divs"), layer = "ICES_Areas_20160601_cut_dense_3857")
+# ices_divs <- readOGR(dsn = "ICES North Sea Divisions", layer = "ICES_Divisons_CodHadWhgPok") # old shapefile
 ices_divs <- makeReadableFortify(ices_divs2)
-
-ices_divs <- makeReadableFortify(ices_divs2)
-ices_divs$long <- ices_divs$long/100000
-ices_divs$lat <- ices_divs$lat/1000000
-
 
 rm(ices_divs2)
 ```
 ```{r save.divs, eval = F, echo = F}
-save(ices_divs, file = "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/ICES Divs/ices_divs.rds")
+save(ices_divs, file = paste0(getwd(), "/Data/ICES Divs/ices_divs.rds"))
 ```
 
+# Download, save, & process survey data
+```{r}
+### Create directory for survey data
+if(dir.exists(surveydata.path2) == FALSE){
+  dir.create(surveydata.path2)
+}
+```
 
-
-
-
-# NS-IBTS (G1022 [Q1] & G2829 [Q3])
+## NS-IBTS (G1022 [Q1] & G2829 [Q3])
 North Sea international Bottom Trawl Survey Q1 & Q3
 
 Survey years available
 Q1: 1966-2022
 Q3: 1991-2022
 
-## Download NS-IBTS
-```{r dwnld.nsibts, echo = T, eval = F}
-### icesDATRAS::getDATRAS (this takes a while)
+```{r save.nsibts, echo = F, eval = F}
+#### Download data
 ns_ibts.hh <- getDATRAS(record = "HH", "NS-IBTS", years = c(1966:2022), quarters = c(1,3))
 ns_ibts.hl <- getDATRAS(record = "HL", "NS-IBTS", years = c(1966:2022), quarters = c(1,3))
 ns_ibts.ca <- getDATRAS(record = "CA", "NS-IBTS", years = c(1966:2022), quarters = c(1,3))
-```
 
-```{r save.nsibts, echo = F, eval = F}
-### save data
+#### Save
 surveydata.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/Survey Data/"
+surveydata.path2 <- paste0(getwd(), "/Data/Survey Data/")
 
-# Create directory
-if(dir.exists(paste0(surveydata.path, "NS-IBTS")) == FALSE){
-  dir.create(paste0(surveydata.path, "NS-IBTS"))
+### Create directory for NS-IBTS
+if(dir.exists(paste0(surveydata.path2, "NS-IBTS")) == FALSE){
+  dir.create(paste0(surveydata.path2, "NS-IBTS"))
 }
+save(ns_ibts.hh, file = paste0(surveydata.path2, "NS-IBTS/ns_ibts.hh.rda"))
+save(ns_ibts.hl, file = paste0(surveydata.path2, "NS-IBTS/ns_ibts.hl.rda"))
+save(ns_ibts.ca, file = paste0(surveydata.path2, "NS-IBTS/ns_ibts.ca.rda"))
 
-save(ns_ibts.hh, file = paste0(surveydata.path, "NS-IBTS/ns_ibts.hh.rda"))
-save(ns_ibts.hl, file = paste0(surveydata.path, "NS-IBTS/ns_ibts.hl.rda"))
-save(ns_ibts.ca, file = paste0(surveydata.path, "NS-IBTS/ns_ibts.ca.rda"))
-```
-
-## Processing NS-IBTS
-
-```{r load.nsibts, cache = F, echo=FALSE, eval=TRUE}
-load(paste0(surveydata.path, "NS-IBTS/ns_ibts.hh.rda"))
-load(paste0(surveydata.path, "NS-IBTS/ns_ibts.hl.rda"))
-load(paste0(surveydata.path, "NS-IBTS/ns_ibts.ca.rda"))
-```
-
-```{r process.nsibts}
-# changing name from data.list to ibts.data will mean I need to change 
-# things later on and throughout the code
+#### Processing NS-IBTS
 ns_ibts.data <- prepsurveydata(ns_ibts.hh, ns_ibts.hl, ns_ibts.ca, ices_rect)
+save(ns_ibts.data, file = paste0(surveydata.path2, "NS-IBTS/ns_ibts.data.rda"))
 ```
 
-```{r save.nsibts.list, echo=FALSE, eval=FALSE}
-save(ns_ibts.data, file = "Survey Data/NS-IBTS/ns_ibts.data.rda")
-```
+>
+>
 
-```{r load.nsibts.list, echo = F}
-load(paste0(surveydata.path, "NS-IBTS/ns_ibts.data.rda"))
-```
-
-********************************************************************************
-********************************************************************************
-
-# BTS (B2453)
+## BTS (B2453)
 Beam Trawl Survey - Southern North Sea, Irish Sean and Western Channel - BTS
 
 Survey quarters available:
@@ -150,50 +121,32 @@ Q4
 Survey years available:
 1985-2022
 
-## Download BTS
 ```{r load.datras, echo = T, eval = F}
+#### Download BTS
 ### icesDATRAS::getDATRAS (this takes a while)
 bts.hh <- getDATRAS(record = "HH", "BTS", years = c(1985:2022), quarters = c(1,3,4))
 bts.hl <- getDATRAS(record = "HL", "BTS", years = c(1985:2022), quarters = c(1,3,4))
 bts.ca <- getDATRAS(record = "CA", "BTS", years = c(1985:2022), quarters = c(1,3,4))
-```
 
-```{r save.datras, echo = F, eval = F}
-### save data
-surveydata.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/Survey Data/"
-
-# Create directory
-if(dir.exists(paste0(surveydata.path, "BTS")) == FALSE){
-  dir.create(paste0(surveydata.path, "BTS"))
+#### Save
+### Create directory
+if(dir.exists(paste0(surveydata.path2, "BTS")) == FALSE){
+  dir.create(paste0(surveydata.path2, "BTS"))
 }
+save(bts.hh, file = paste0(surveydata.path2, "BTS/bts.hh.rda"))
+save(bts.hl, file = paste0(surveydata.path2, "BTS/bts.hl.rda"))
+save(bts.ca, file = paste0(surveydata.path2, "BTS/bts.ca.rda"))
 
-save(bts.hh, file = paste0(surveydata.path, "BTS/bts.hh.rda"))
-save(bts.hl, file = paste0(surveydata.path, "BTS/bts.hl.rda"))
-save(bts.ca, file = paste0(surveydata.path, "BTS/bts.ca.rda"))
-```
-
-## Processing BTS
-```{r load.data, cache = F, echo=FALSE, eval=TRUE}
-### Load
-load(paste0(surveydata.path, "BTS/bts.hh.rda"))
-load(paste0(surveydata.path, "BTS/bts.hl.rda"))
-load(paste0(surveydata.path, "BTS/bts.ca.rda"))
-```
-
-```{r}
-### Process
+#### Processing BTS
 bts.data <- prepsurveydata(bts.hh, bts.hl, bts.ca, ices_rect)
-```
-
-```{r save.data.list, echo=FALSE, eval=FALSE}
 ### Save
-save(bts.data, file = paste0(surveydata.path, "BTS/bts.data.rda"))
+save(bts.data, file = paste0(surveydata.path2, "BTS/bts.data.rda"))
 ```
 
-********************************************************************************
-********************************************************************************
+>
+>
 
-# BTS-Isis (B2453)
+## BTS-Isis (B2453)
 Beam Trawl Survey - Ship Isis
 Same survey as above. Filtered for Isis ship only?
 
@@ -205,57 +158,36 @@ Q4
 Survey years available:
 1985-2022
 
-## Load BTS (from previous step)
 ```{r load.data, cache = F, echo=FALSE, eval=TRUE}
-### Load
-load(paste0(surveydata.path, "BTS/bts.hh.rda"))
-load(paste0(surveydata.path, "BTS/bts.hl.rda"))
-load(paste0(surveydata.path, "BTS/bts.ca.rda"))
-```
+### Load BTS
+load(paste0(surveydata.path2, "BTS/bts.hh.rda"))
+load(paste0(surveydata.path2, "BTS/bts.hl.rda"))
+load(paste0(surveydata.path2, "BTS/bts.ca.rda"))
 
-## Filter BTS
-```{r}
+#### Filter BTS to ISIS ship
 bts_isis.hh <- bts.hh[bts.hh$Ship == "64SS",]
 bts_isis.hl <- bts.hl[bts.hl$Ship == "64SS",]
 bts_isis.ca <- bts.ca[bts.ca$Ship == "64SS",]
-```
 
-```{r}
-surveydata.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/Survey Data/"
-
-# Create directory
-if(dir.exists(paste0(surveydata.path, "BTS-Isis")) == FALSE){
-  dir.create(paste0(surveydata.path, "BTS-Isis"))
+#### Save
+### Create directory
+if(dir.exists(paste0(surveydata.path2, "BTS-Isis")) == FALSE){
+  dir.create(paste0(surveydata.path2, "BTS-Isis"))
 }
+save(bts_isis.hh, file = paste0(surveydata.path2, "BTS-Isis/bts_isis.hh.rda"))
+save(bts_isis.hl, file = paste0(surveydata.path2, "BTS-Isis/bts_isis.hl.rda"))
+save(bts_isis.ca, file = paste0(surveydata.path2, "BTS-Isis/bts_isis.ca.rda"))
 
-save(bts_isis.hh, file = paste0(surveydata.path, "BTS-Isis/bts_isis.hh.rda"))
-save(bts_isis.hl, file = paste0(surveydata.path, "BTS-Isis/bts_isis.hl.rda"))
-save(bts_isis.ca, file = paste0(surveydata.path, "BTS-Isis/bts_isis.ca.rda"))
-```
-
-## Processing BTS-Isis
-```{r load.data, cache = F, echo=FALSE, eval=TRUE}
-### Load
-load(paste0(surveydata.path, "BTS/bts_isis.hh.rda"))
-load(paste0(surveydata.path, "BTS/bts_isis.hl.rda"))
-load(paste0(surveydata.path, "BTS/bts_isis.ca.rda"))
-```
-
-```{r}
-### Process
+#### Processing BTS-Isis
 bts_isis.data <- prepsurveydata(bts_isis.hh, bts_isis.hl, bts_isis.ca, ices_rect)
-```
-
-```{r save.data.list, echo=FALSE, eval=FALSE}
 ### Save
-save(bts_isis.data, file = paste0(surveydata.path, "BTS-Isis/bts_isis.data.rda"))
+save(bts_isis.data, file = paste0(surveydata.path2, "BTS-Isis/bts_isis.data.rda"))
 ```
 
+>
+>
 
-********************************************************************************
-********************************************************************************
-
-# UK-BTS (B2453)
+## UK-BTS (B2453)
 Same survey as above.Filtered for UK vessels only?
 
 Survey quarters available:
@@ -266,61 +198,33 @@ Q4
 Survey years available:
 1985-2022
 
-## Load BTS (from previous step)
 ```{r load.data, cache = F, echo=FALSE, eval=TRUE}
-### Load
-surveydata.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/Survey Data/"
-
-load(paste0(surveydata.path, "BTS/bts.hh.rda"))
-load(paste0(surveydata.path, "BTS/bts.hl.rda"))
-load(paste0(surveydata.path, "BTS/bts.ca.rda"))
-```
-
-## Filter BTS
-```{r}
+### Load BTS
+load(paste0(surveydata.path2, "BTS/bts.hh.rda"))
+load(paste0(surveydata.path2, "BTS/bts.hl.rda"))
+load(paste0(surveydata.path2, "BTS/bts.ca.rda"))
+### Filter BTS
 uk_bts.hh <- bts.hh[bts.hh$Country == "GB",]
 uk_bts.hl <- bts.hl[bts.hl$Country == "GB",]
 uk_bts.ca <- bts.ca[bts.ca$Country == "GB",]
-```
-
-```{r save.datras, echo = F, eval = F}
-### save data
-surveydata.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/Survey Data/"
-
-# Create directory
-if(dir.exists(paste0(surveydata.path, "UK-BTS")) == FALSE){
-  dir.create(paste0(surveydata.path, "UK-BTS"))
+### Create directory
+if(dir.exists(paste0(surveydata.path2, "UK-BTS")) == FALSE){
+  dir.create(paste0(surveydata.path2, "UK-BTS"))
 }
+save(uk_bts.hh, file = paste0(surveydata.path2, "UK-BTS/uk_bts.hh.rda"))
+save(uk_bts.hl, file = paste0(surveydata.path2, "UK-BTS/uk_bts.hl.rda"))
+save(uk_bts.ca, file = paste0(surveydata.path2, "UK-BTS/uk_bts.ca.rda"))
 
-save(uk_bts.hh, file = paste0(surveydata.path, "UK-BTS/uk_bts.hh.rda"))
-save(uk_bts.hl, file = paste0(surveydata.path, "UK-BTS/uk_bts.hl.rda"))
-save(uk_bts.ca, file = paste0(surveydata.path, "UK-BTS/uk_bts.ca.rda"))
-```
-
-## Processing UK-BTS
-```{r load.data, cache = F, echo=FALSE, eval=TRUE}
-### Load
-surveydata.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/Survey Data/"
-
-load(paste0(surveydata.path, "UK-BTS/uk_bts.hh.rda"))
-load(paste0(surveydata.path, "UK-BTS/uk_bts.hl.rda"))
-load(paste0(surveydata.path, "UK-BTS/uk_bts.ca.rda"))
-```
-
-```{r}
-### Process
+#### Processing UK-BTS
 uk_bts.data <- prepsurveydata(uk_bts.hh, uk_bts.hl, uk_bts.ca, ices_rect)
-```
-
-```{r save.data.list, echo=FALSE, eval=FALSE}
 ### Save
-save(uk_bts.data, file = paste0(surveydata.path, "UK-BTS/uk_bts.data.rda"))
+save(uk_bts.data, file = paste0(surveydata.path2, "UK-BTS/uk_bts.data.rda"))
 ```
 
-********************************************************************************
-********************************************************************************
+>
+>
 
-# SNS (B3499)
+## SNS (B3499)
 Sole Net Survey (SNS) Industry survey
 
 Survey quarters available:
@@ -329,49 +233,30 @@ Q3
 Survey years available:
 1969-2022
 
-## Download SNS
 ```{r load.datras, echo = T, eval = F}
 ### icesDATRAS::getDATRAS (this takes a while)
 sns.hh <- getDATRAS(record = "HH", "SNS", years = c(1969:2022), quarters = c(3))
 sns.hl <- getDATRAS(record = "HL", "SNS", years = c(1969:2022), quarters = c(3))
 sns.ca <- getDATRAS(record = "CA", "SNS", years = c(1969:2022), quarters = c(3))
-```
-
-```{r save.datras, echo = F, eval = F}
 ### save data
-surveydata.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/Survey Data/"
-
 # Create directory
-if(dir.exists(paste0(surveydata.path, "SNS")) == FALSE){
-  dir.create(paste0(surveydata.path, "SNS"))
+if(dir.exists(paste0(surveydata.path2, "SNS")) == FALSE){
+  dir.create(paste0(surveydata.path2, "SNS"))
 }
+save(sns.hh, file = paste0(surveydata.path2, "SNS/sns.hh.rda"))
+save(sns.hl, file = paste0(surveydata.path2, "SNS/sns.hl.rda"))
+save(sns.ca, file = paste0(surveydata.path2, "SNS/sns.ca.rda"))
 
-save(sns.hh, file = paste0(surveydata.path, "SNS/sns.hh.rda"))
-save(sns.hl, file = paste0(surveydata.path, "SNS/sns.hl.rda"))
-save(sns.ca, file = paste0(surveydata.path, "SNS/sns.ca.rda"))
-```
-
-## Processing SNS
-```{r load.data, cache = F, echo=FALSE, eval=TRUE}
-load(paste0(surveydata.path, "SNS/sns.hh.rda"))
-load(paste0(surveydata.path, "SNS/sns.hl.rda"))
-load(paste0(surveydata.path, "SNS/sns.ca.rda"))
-```
-
-```{r}
-### Process
+### Processing SNS
 sns.data <- prepsurveydata(sns.hh, sns.hl, sns.ca, ices_rect)
-```
-
-```{r save.data.list, echo=FALSE, eval=FALSE}
 ### Save
-save(sns.data, file = paste0(surveydata.path, "SNS/sns.data.rda"))
+save(sns.data, file = paste0(surveydata.path2, "SNS/sns.data.rda"))
 ```
 
-********************************************************************************
-********************************************************************************
+>
+>
 
-# YFS (B6805) [Doesnt exist in ICES Vocab look-up]
+## YFS (B6805) [Doesnt exist in ICES Vocab look-up]
 I think this should be the Demersal Young Fish Survey (DYFS, B7567)
 
 Survey quarters available:
@@ -381,49 +266,31 @@ Q4
 Survey years available:
 1970-2020
 
-## Download DYFS
 ```{r load.datras, echo = T, eval = F}
 ### icesDATRAS::getDATRAS (this takes a while)
 dyfs.hh <- getDATRAS(record = "HH", "DYFS", years = c(1969:2022), quarters = c(3,4))
 dyfs.hl <- getDATRAS(record = "HL", "DYFS", years = c(1969:2022), quarters = c(3,4))
 dyfs.ca <- getDATRAS(record = "CA", "DYFS", years = c(1969:2022), quarters = c(3,4))
-```
 
-```{r save.datras, echo = F, eval = F}
-### save data
-surveydata.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/Survey Data/"
-
-# Create directory
-if(dir.exists(paste0(surveydata.path, "DYFS")) == FALSE){
-  dir.create(paste0(surveydata.path, "DYFS"))
+#### Save
+### Create directory
+if(dir.exists(paste0(surveydata.path2, "DYFS")) == FALSE){
+  dir.create(paste0(surveydata.path2, "DYFS"))
 }
+save(dyfs.hh, file = paste0(surveydata.path2, "DYFS/dyfs.hh.rda"))
+save(dyfs.hl, file = paste0(surveydata.path2, "DYFS/dyfs.hl.rda"))
+save(dyfs.ca, file = paste0(surveydata.path2, "DYFS/dyfs.ca.rda"))
 
-save(dyfs.hh, file = paste0(surveydata.path, "DYFS/dyfs.hh.rda"))
-save(dyfs.hl, file = paste0(surveydata.path, "DYFS/dyfs.hl.rda"))
-save(dyfs.ca, file = paste0(surveydata.path, "DYFS/dyfs.ca.rda"))
-```
-
-## Processing DYFS
-```{r load.data, cache = F, echo=FALSE, eval=TRUE}
-load(paste0(surveydata.path, "DYFS/dyfs.hh.rda"))
-load(paste0(surveydata.path, "DYFS/dyfs.hl.rda"))
-load(paste0(surveydata.path, "DYFS/dyfs.ca.rda"))
-```
-
-```{r}
-### Process
+#### Processing DYFS
 dyfs.data <- prepsurveydata(dyfs.hh, dyfs.hl, dyfs.ca, ices_rect)
-```
-
-```{r save.data.list, echo=FALSE, eval=FALSE}
 ### Save
-save(dyfs.data, file = paste0(surveydata.path, "DYFS/dyfs.data.rda"))
+save(dyfs.data, file = paste0(surveydata.path2, "DYFS/dyfs.data.rda"))
 ```
 
-********************************************************************************
-********************************************************************************
+>
+>
 
-# FR-YFS (B5507) [Doesnt exist in ICES Vocab look-up]
+## FR-YFS (B5507) [Doesnt exist in ICES Vocab look-up]
 I think this should be the Demersal Young Fish Survey (DYFS, B7567)
 
 Survey quarters available:
@@ -433,10 +300,10 @@ Q4
 Survey years available:
 1970-2020
 
-********************************************************************************
-********************************************************************************
+>
+>
 
-# FR-CGFS (G3425) 
+## FR-CGFS (G3425) 
 French Channel Groundfish Survey, FR-CGFS, Part of Western IBTS 4th quarter
 
 Survey quarters available:
@@ -445,49 +312,31 @@ Q4
 Survey years available:
 1988-2022
 
-## Download FR-CGFS
 ```{r load.datras, echo = T, eval = F}
 ### icesDATRAS::getDATRAS (this takes a while)
 fr_cgfs.hh <- getDATRAS(record = "HH", "FR-CGFS", years = c(1969:2022), quarters = c(4))
 fr_cgfs.hl <- getDATRAS(record = "HL", "FR-CGFS", years = c(1969:2022), quarters = c(4))
 fr_cgfs.ca <- getDATRAS(record = "CA", "FR-CGFS", years = c(1969:2022), quarters = c(4))
-```
 
-```{r save.datras, echo = F, eval = F}
-### save data
-surveydata.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/Survey Data/"
-
-# Create directory
-if(dir.exists(paste0(surveydata.path, "FR-CGFS")) == FALSE){
-  dir.create(paste0(surveydata.path, "FR-CGFS"))
+#### Save
+### Create directory
+if(dir.exists(paste0(surveydata.path2, "FR-CGFS")) == FALSE){
+  dir.create(paste0(surveydata.path2, "FR-CGFS"))
 }
+save(fr_cgfs.hh, file = paste0(surveydata.path2, "FR-CGFS/fr_cgfs.hh.rda"))
+save(fr_cgfs.hl, file = paste0(surveydata.path2, "FR-CGFS/fr_cgfs.hl.rda"))
+save(fr_cgfs.ca, file = paste0(surveydata.path2, "FR-CGFS/fr_cgfs.ca.rda"))
 
-save(fr_cgfs.hh, file = paste0(surveydata.path, "FR-CGFS/fr_cgfs.hh.rda"))
-save(fr_cgfs.hl, file = paste0(surveydata.path, "FR-CGFS/fr_cgfs.hl.rda"))
-save(fr_cgfs.ca, file = paste0(surveydata.path, "FR-CGFS/fr_cgfs.ca.rda"))
-```
-
-## Processing FR-CGFS
-```{r load.data, cache = F, echo=FALSE, eval=TRUE}
-load(paste0(surveydata.path, "FR-CGFS/fr_cgfs.hh.rda"))
-load(paste0(surveydata.path, "FR-CGFS/fr_cgfs.hl.rda"))
-load(paste0(surveydata.path, "FR-CGFS/fr_cgfs.ca.rda"))
-```
-
-```{r}
-### Process
+#### Processing FR-CGFS
 fr_cgfs.data <- prepsurveydata(fr_cgfs.hh, fr_cgfs.hl, fr_cgfs.ca, ices_rect)
-```
-
-```{r save.data.list, echo=FALSE, eval=FALSE}
 ### Save
-save(fr_cgfs.data, file = paste0(surveydata.path, "FR-CGFS/fr_cgfs.data.rda"))
+save(fr_cgfs.data, file = paste0(surveydata.path2, "FR-CGFS/fr_cgfs.data.rda"))
 ```
 
-********************************************************************************
-********************************************************************************
+>
+>
 
-# SWC-IBTS (G4299)
+## SWC-IBTS (G4299)
 Scottish westcoast groundfish survey Q4 (Old) SWC-IBTS
 
 Survey quarters available:
@@ -496,49 +345,32 @@ Q4
 Survey years available:
 1985-2010
 
-## Download SWC-IBTS
 ```{r load.datras, echo = T, eval = F}
 ### icesDATRAS::getDATRAS (this takes a while)
 swc_ibts.hh <- getDATRAS(record = "HH", "SWC-IBTS", years = c(1985:2010), quarters = c(1,4))
 swc_ibts.hl <- getDATRAS(record = "HL", "SWC-IBTS", years = c(1985:2010), quarters = c(1,4))
 swc_ibts.ca <- getDATRAS(record = "CA", "SWC-IBTS", years = c(1985:2010), quarters = c(1,4))
-```
 
-```{r save.datras, echo = F, eval = F}
-### save data
-surveydata.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/Survey Data/"
-
-# Create directory
-if(dir.exists(paste0(surveydata.path, "SWC-IBTS")) == FALSE){
-  dir.create(paste0(surveydata.path, "SWC-IBTS"))
+#### Save
+### Create directory
+if(dir.exists(paste0(surveydata.path2, "SWC-IBTS")) == FALSE){
+  dir.create(paste0(surveydata.path2, "SWC-IBTS"))
 }
 
-save(swc_ibts.hh, file = paste0(surveydata.path, "SWC-IBTS/swc_ibts.hh.rda"))
-save(swc_ibts.hl, file = paste0(surveydata.path, "SWC-IBTS/swc_ibts.hl.rda"))
-save(swc_ibts.ca, file = paste0(surveydata.path, "SWC-IBTS/swc_ibts.ca.rda"))
-```
+save(swc_ibts.hh, file = paste0(surveydata.path2, "SWC-IBTS/swc_ibts.hh.rda"))
+save(swc_ibts.hl, file = paste0(surveydata.path2, "SWC-IBTS/swc_ibts.hl.rda"))
+save(swc_ibts.ca, file = paste0(surveydata.path2, "SWC-IBTS/swc_ibts.ca.rda"))
 
-## Processing SWC-IBTS
-```{r load.data, cache = F, echo=FALSE, eval=TRUE}
-load(paste0(surveydata.path, "SWC-IBTS/swc_ibts.hh.rda"))
-load(paste0(surveydata.path, "SWC-IBTS/swc_ibts.hl.rda"))
-load(paste0(surveydata.path, "SWC-IBTS/swc_ibts.ca.rda"))
-```
-
-```{r}
-### Process
+#### Processing SWC-IBTS
 swc_ibts.data <- prepsurveydata(swc_ibts.hh, swc_ibts.hl, swc_ibts.ca, ices_rect)
-```
-
-```{r save.data.list, echo=FALSE, eval=FALSE}
 ### Save
-save(swc_ibts.data, file = paste0(surveydata.path, "SWC-IBTS/swc_ibts.data.rda"))
+save(swc_ibts.data, file = paste0(surveydata.path2, "SWC-IBTS/swc_ibts.data.rda"))
 ```
 
-********************************************************************************
-********************************************************************************
+>
+>
 
-# SCOWCGFS (G4815)
+## SCOWCGFS (G4815)
 Scottish Westcoast Groundfish Survey (SCOWCGFS) Quarter 4, Part of Western IBTS
 
 Survey quarters available:
@@ -547,49 +379,31 @@ Q4
 Survey years available:
 2011-2022
 
-## Download SCOWCGFS
 ```{r load.datras, echo = T, eval = F}
 ### icesDATRAS::getDATRAS (this takes a while)
 scowcgfs.hh <- getDATRAS(record = "HH", "SCOWCGFS", years = c(2011:2022), quarters = c(1,2,3,4))
 scowcgfs.hl <- getDATRAS(record = "HL", "SCOWCGFS", years = c(2011:2022), quarters = c(1,2,3,4))
 scowcgfs.ca <- getDATRAS(record = "CA", "SCOWCGFS", years = c(2011:2022), quarters = c(1,2,3,4))
-```
 
-```{r save.datras, echo = F, eval = F}
-### save data
-surveydata.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/Survey Data/"
-
-# Create directory
-if(dir.exists(paste0(surveydata.path, "SCOWCGFS")) == FALSE){
-  dir.create(paste0(surveydata.path, "SCOWCGFS"))
+#### Save
+### Create directory
+if(dir.exists(paste0(surveydata.path2, "SCOWCGFS")) == FALSE){
+  dir.create(paste0(surveydata.path2, "SCOWCGFS"))
 }
+save(scowcgfs.hh, file = paste0(surveydata.path2, "SCOWCGFS/scowcgfs.hh.rda"))
+save(scowcgfs.hl, file = paste0(surveydata.path2, "SCOWCGFS/scowcgfs.hl.rda"))
+save(scowcgfs.ca, file = paste0(surveydata.path2, "SCOWCGFS/scowcgfs.ca.rda"))
 
-save(scowcgfs.hh, file = paste0(surveydata.path, "SCOWCGFS/scowcgfs.hh.rda"))
-save(scowcgfs.hl, file = paste0(surveydata.path, "SCOWCGFS/scowcgfs.hl.rda"))
-save(scowcgfs.ca, file = paste0(surveydata.path, "SCOWCGFS/scowcgfs.ca.rda"))
-```
-
-## Processing SCOWCGFS
-```{r load.data, cache = F, echo=FALSE, eval=TRUE}
-load(paste0(surveydata.path, "SCOWCGFS/scowcgfs.hh.rda"))
-load(paste0(surveydata.path, "SCOWCGFS/scowcgfs.hl.rda"))
-load(paste0(surveydata.path, "SCOWCGFS/scowcgfs.ca.rda"))
-```
-
-```{r}
-### Process
+#### Processing SCOWCGFS
 scowcgfs.data <- prepsurveydata(scowcgfs.hh, scowcgfs.hl, scowcgfs.ca, ices_rect)
-```
-
-```{r save.data.list, echo=FALSE, eval=FALSE}
 ### Save
-save(scowcgfs.data, file = paste0(surveydata.path, "SCOWCGFS/scowcgfs.data.rda"))
+save(scowcgfs.data, file = paste0(surveydata.path2, "SCOWCGFS/scowcgfs.data.rda"))
 ```
 
-********************************************************************************
-********************************************************************************
+>
+>
 
-# IGFS (G7212)
+## IGFS (G7212)
 Irish Groundfish Survey, IE-IGFS, Part of Western IBTS 4th quarter
 
 Survey quarters available:
@@ -598,41 +412,24 @@ Q4
 Survey years available:
 2003-2022
 
-## Download IE-IGFS
 ```{r load.datras, echo = T, eval = F}
 ### icesDATRAS::getDATRAS (this takes a while)
 ie_igfs.hh <- getDATRAS(record = "HH", "IE-IGFS", years = c(2003:2022), quarters = c(4))
 ie_igfs.hl <- getDATRAS(record = "HL", "IE-IGFS", years = c(2003:2022), quarters = c(4))
 ie_igfs.ca <- getDATRAS(record = "CA", "IE-IGFS", years = c(2003:2022), quarters = c(4))
-```
 
-```{r save.datras, echo = F, eval = F}
-### save data
-surveydata.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/Survey Data/"
-
-# Create directory
-if(dir.exists(paste0(surveydata.path, "IE-IGFS")) == FALSE){
-  dir.create(paste0(surveydata.path, "IE-IGFS"))
+#### Save
+### Create directory
+if(dir.exists(paste0(surveydata.path2, "IE-IGFS")) == FALSE){
+  dir.create(paste0(surveydata.path2, "IE-IGFS"))
 }
 
-save(ie_igfs.hh, file = paste0(surveydata.path, "IE-IGFS/ie_igfs.hh.rda"))
-save(ie_igfs.hl, file = paste0(surveydata.path, "IE-IGFS/ie_igfs.hl.rda"))
-save(ie_igfs.ca, file = paste0(surveydata.path, "IE-IGFS/ie_igfs.ca.rda"))
-```
+save(ie_igfs.hh, file = paste0(surveydata.path2, "IE-IGFS/ie_igfs.hh.rda"))
+save(ie_igfs.hl, file = paste0(surveydata.path2, "IE-IGFS/ie_igfs.hl.rda"))
+save(ie_igfs.ca, file = paste0(surveydata.path2, "IE-IGFS/ie_igfs.ca.rda"))
 
-## Processing IE-IGFS
-```{r load.data, cache = F, echo=FALSE, eval=TRUE}
-load(paste0(surveydata.path, "IE-IGFS/ie_igfs.hh.rda"))
-load(paste0(surveydata.path, "IE-IGFS/ie_igfs.hl.rda"))
-load(paste0(surveydata.path, "IE-IGFS/ie_igfs.ca.rda"))
-```
-
-```{r}
-### Process
+#### Processing IE-IGFS
 ie_igfs.data <- prepsurveydata(ie_igfs.hh, ie_igfs.hl, ie_igfs.ca, ices_rect)
-```
-
-```{r save.data.list, echo=FALSE, eval=FALSE}
 ### Save
-save(ie_igfs.data, file = paste0(surveydata.path, "IE-IGFS/ie_igfs.data.rda"))
+save(ie_igfs.data, file = paste0(surveydata.path2, "IE-IGFS/ie_igfs.data.rda"))
 ```
