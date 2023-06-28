@@ -18,6 +18,7 @@ editor_options:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(eval = TRUE, echo = TRUE, fig.align = "center", fig.width = 6, comment = ">", cache = F)
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
 ```
 
 # Prepare Workspace
@@ -44,18 +45,25 @@ rm(pckgs, pkg)
 
 # Source user functions
 ```{r funs, cache = F}
-source("ibts_funs.R") # for dealing with datras data
-source("spatinds_funs.R") # for computing spatial indicators
+source(paste0(getwd(), "/Functions/dataprep_funs.R")) # for dealing with datras data
+source(paste0(getwd(), "/Functions/spatinds_funs.R")) # for computing spatial indicators
 ```
 
 # Load in Data
 ## ICES Divisions and Rectangles 
 ```{r ices.rect, cache = T}
 ### ICES Rectangles
-load("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/ICES Rect/ices_rect.rds")
+ices_rect2 <- readOGR(dsn = paste0(getwd(), "/Data/ICES Rect"), layer = "StatRec_map_Areas_Full_20170124")
+ices_rect <- makeReadableFortify(ices_rect2)
 
-### ICES Divisions (get new)
-load("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/ICES Divs/ices_divs.rds")
+rm(ices_rect2)
+
+### ICES Divisions
+ices_divs2 <- readOGR(dsn = paste0(getwd(), "/Data/ICES Divs"), layer = "ICES_Areas_20160601_cut_dense_3857")
+# ices_divs <- readOGR(dsn = "ICES North Sea Divisions", layer = "ICES_Divisons_CodHadWhgPok") # old shapefile
+ices_divs <- makeReadableFortify(ices_divs2)
+
+rm(ices_divs2)
 ```
 
 ### Plot Divisions
@@ -72,9 +80,11 @@ ggplot() +
 
 
 ## Survey Data
+Load in the survey data previously downloaded and processed in `1_Download_Survey_Data.Rmd`. These files are too large to upload to GitHub, so run the code and save to local drive. Change `surveydata.path` to the file locations: 
 ```{r}
 surveydata.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/Survey Data/"
 
+# We don't need to load these in for now
 load(paste0(surveydata.path, "NS-IBTS/ns_ibts.data.rda"))   # NS-IBTS
 load(paste0(surveydata.path, "BTS/bts.data.rda"))           # BTS
 load(paste0(surveydata.path, "BTS-Isis/bts_isis.data.rda")) # BTS-Isis
@@ -88,8 +98,9 @@ load(paste0(surveydata.path, "SWC-IBTS/swc_ibts.data.rda")) # SWC-IBTS
 ```
 
 ## Stock Objects
+Load in the stock assessment objects:
 ```{r}
-stockobj.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/Stocks/Stock Objects/"
+stockobj.path <- paste0(getwd(), "/Data/DR_Stocks/Stock_Objects/")
 
 for(stockfile in list.files(stockobj.path)){
   load(paste0(stockobj.path, stockfile))
@@ -99,14 +110,15 @@ for(stockfile in list.files(stockobj.path)){
 ## Stock Metadata and Reference Points
 I have manually taken information from the advice sheets and put it into a Excel document
 ```{r}
-allstk_metadata <- read_excel("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/Stocks/Advice Sheets/stock_metadata_refpts.xlsx", sheet = "stk_metadata")
+allstk_metadata <- read_excel(paste0(getwd(), "/Data/DR_Stocks/Advice_Sheets/stock_metadata_refpts.xlsx"), sheet = "stk_metadata")
 
-allstk_refpts <- read_excel("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/Stocks/Advice Sheets/stock_metadata_refpts.xlsx", sheet = "stk_refpts")
+allstk_refpts <- read_excel(paste0(getwd(), "/Data/DR_Stocks/Advice_Sheets/stock_metadata_refpts.xlsx"), sheet = "stk_refpts")
 ```
 
 # Run
 ## Set Parameters
 ### Choose Stock
+Change `stk` and `stk.chr` to the stock you want to run the ROC analysis for.
 ```{r set.stock}
 ### Stocks available
 unique(allstk_metadata$stk_id) # ignore so.27.7d for now, need to find YFS survey data
@@ -125,9 +137,6 @@ head(species)
 
 ### Get Valid Aphia ID using Latin name
 species_aphia <- findAphia(species$latin_name, latin = TRUE)
-
-### Check that Latin name and common name match
-findAphia(species$spcs_name) == species_aphia
 ```
 
 ### Stock Divisions
@@ -139,8 +148,7 @@ stk_divs2 <- allstk_metadata %>% filter(
   unique()
 stk_divs <- strsplit(as.character(stk_divs2), split = ", ")[[1]]
 rm(stk_divs2)
-```
-```{r, echo = F}
+
 print(paste0("ICES Divisions for ", species$spcs_name, " (", stk.chr, ") :"))
 print(stk_divs)
 ```
@@ -153,22 +161,28 @@ stk_refpts <- allstk_refpts %>% filter(
   stk_name == stk.chr)
 print(stk_refpts)
 ```
+
 ### Survey Information
-These are the surveys that were used in the most recent assessment and mentioned on the ICES advice sheets for the corresponding stock. Most stocks have more than survey index, coming from different sources of survey data.
+These are the surveys that were used in the most recent assessment and mentioned on the ICES advice sheets for the corresponding stock. Most stocks have more than survey index incorperated within the stock assessment. Each individual survey index can also use multiple sources of survey data. E.g. a Q3 survey index might use and combine data from NS-IBTS Q3 and BTS Q3.
 ```{r get.surveyinfo}
+# get survey information for the current stock we are looking at
 stk_surveys <- allstk_metadata %>% filter(
   stk_id == stk.chr) %>%
   select(-description, -date_published)
 print(stk_surveys)
 ```
 
-There are many survey indices used, each using survey data from different year ranges and different quarters. We need to load in the correct survey data for each `survey_name` and use the correct time series of data in the later analysis so that the data used in my analysis matches the data used in the stock assessment. 
-
+There are many survey indices used, each using survey data from different year ranges and different quarters. In the spatial indicator analysis we will try to use the exact same range of survey data that was used in the stock assessments for each stock. This will ensure that the survey data used in the spatial analysis matches the data used in the stock assessment.
 ```{r}
+### Select the surveys used within the stock assessment
+## we will load in the survey data from local drive 
 surveydata.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/Survey Data/"
 
-### Load the survey data used in the stock assessment for the current stock
-### Store in a list so we can loop through it later
+## Load the survey data used in the stock assessment for the current stock we are looking at
+## Store in a list so we can loop through it later
+## e.g. for Witch, BTS and NS-IBTS survey data were used. We store all this survey data into a list.
+## we will filter this survey data to the correct years and quarters for each survey index later
+## e.g. witch has 3 survey indices, BTS Q3, IBTS Q1, IBTS Q3, with different year ranges
 data.list <- list()
 for(survey in unique(stk_surveys$survey_name)){
   survey_data <- list.files(paste0(surveydata.path, survey), pattern = "*.data.rds*")
@@ -176,9 +190,15 @@ for(survey in unique(stk_surveys$survey_name)){
   survey_data <- try(get(survey_data))
   data.list[[survey]] <- survey_data
 }
-```
 
-Some surveys are combined to form one index. I will need to also combine the data in these circumstances.
+### Check that surveys loaded are what we expect
+summary(data.list)
+unique(stk_surveys$survey_name)
+```
+Each survey within `data.list` contains the `hh`, `hl`, `ca` and combined `hlhh` data that was constructed in the data processing used `prepsurveydata`. We will mostly be working with the `hlhh` data but the rest is there for convenience.
+
+
+Some surveys are combined to form one index as previously mentioned (e.g. IBTS Q3 and BTS Q3 might be combined to form a Q3 Survey Index)
 ```{r}
 ### Get the name of the individual indexes used in the stock assessment
 ### Each index can be comprised of multiple survey data sources 
@@ -188,13 +208,16 @@ stk_surveys_indices <- allstk_metadata %>% filter(
   select(survey_index) %>%
   unique()
 print(stk_surveys_indices)
-
-# Get the survey data used in each index and filter it so that it matches
-# the data used in the stock assessment e.g. by Species, Years, and Quarters. 
+```
+We will now filter the survey data in accordance to the data used within each survey index. Sometimes the exact date ranges of survey data is not given in the stock assessment advice sheets. I have made the assumption that where the end year of the survey data used is not given, data up to the most recent data is used. Similarly, if the start year of survey data used is not given, data is used from the beginning of the survey data time series i.e. when the survey began. This latter assumption will need to be double checked as often older survey data is omitted due to differences in sampling effort or design compared to the most recent data.
+```{r}
+### Get the survey data used in each index and filter it so that it matches
+### the data used in the stock assessment e.g. by Species, Years, and Quarters. 
 stk_data_filtered <- list()
 for(indx in stk_surveys_indices$survey_index){
-  # get name of the survey index
+  # for each survey index in the stock assessment...
   print(paste0("Survey Index: ", indx))
+  # get the row of data in allstk_metadata for this survey index
   stkindx_surveys <- allstk_metadata %>%
   filter(stk_id == stk.chr,
          survey_index == indx)
@@ -203,27 +226,29 @@ for(indx in stk_surveys_indices$survey_index){
   
   for(survey in stkindx_surveys$survey_name){
     print(paste0("Survey: ", survey))
-    
-    # get info on the data used in the stock assessment 
+    # for each survey within each survey index...
+    # get the start and end years of the survey data used
     yr_strt <- stkindx_surveys$survey_yrs_start[stkindx_surveys$survey_name==survey]
     yr_end <- stkindx_surveys$survey_yrs_end[stkindx_surveys$survey_name==survey] 
-    # sometime the end year is not given, assume it used data up to assessment year
-    if(is.na(yr_end)==TRUE){yr_end <- 2022}
-    if(is.na(yr_strt)==TRUE){yr_strt <- 1900}
+    # assumptions made if start or end year is not given in the stock assessment
+    if(is.na(yr_end)==TRUE){yr_end <- 2022} # assume most recent data used
+    if(is.na(yr_strt)==TRUE){yr_strt <- 1900} # assume oldest data used
+    # get the quarters used in stock stock index for this survey
     qrs <- stkindx_surveys$survey_qrs[stkindx_surveys$survey_name==survey]
 
     # sometimes the quarters used is not available in the advice sheets, so 
-    # assume all quarters were used. This isn't stated probably because some 
+    # assume all quarters were used. This isn't explicitly stated probably because some 
     # surveys are only run in certain quarters so there is no need to say.
     # Setting `qrs` to c(1:4) will retain whatever data the survey has. 
     if(is.na(qrs)){
-      qrs = c(1:4)
+      qrs <- c(1:4)
     }
     
-    # filter the data for each survey within each survey index
+    # filter the years and quarters of survey data, for each survey, within each survey index
+    # CHECK: do I need to do c(qrs). Will this code work if there are multiple quartes that need to be selected
     hlhh <- try(data.list[[survey]]$hlhh %>%
       filter(Year %in% c(yr_strt:yr_end),
-             Quarter %in% qrs))
+             Quarter %in% qrs)) 
     hl <- try(data.list[[survey]]$hl %>%
       filter(Year %in% c(yr_strt:yr_end),
              Quarter %in% qrs))
@@ -237,6 +262,22 @@ for(indx in stk_surveys_indices$survey_index){
     stk_data_filtered[[indx]][[survey]] <- list(hlhh = hlhh, hl = hl, hh = hh, ca = ca)
   }
 }
+
+### Check survey indices are what we expected
+## These should match
+summary(stk_data_filtered)
+stk_surveys_indices$survey_index
+## Check the years and quarters match
+
+# for index 1, survey 1
+# are the start and end years the same?
+## will give NA is missing from stk_surveys
+unique(stk_data_filtered[[1]][[1]]$hlhh$Year)
+min(stk_data_filtered[[1]][[1]]$hlhh$Year)==stk_surveys$survey_yrs_start[1]
+max(stk_data_filtered[[1]][[1]]$hlhh$Year)==stk_surveys$survey_yrs_end[1]
+
+unique(stk_data_filtered[[1]][[1]]$hlhh$Quarter)
+unique(stk_data_filtered[[1]][[1]]$hlhh$Quarter) == stk_surveys$survey_qrs[1]
 ```
 
 Check that data was handled and filtered correctly
