@@ -140,7 +140,7 @@ abline(0,1, lwd = 2)")
 
 # For plotting multiple roc curves on one plot. Has been updated to use roc_fun2
 
-roc_group <- function(SpatInds, StatusInds, stk_status, stk_name, species_name){
+roc_group <- function(SpatInds, StatusInds, stk_status, stk_name, species_name, survey_index, survey_name){
   cols <- 2
   stack <- 0.95
   
@@ -158,14 +158,21 @@ roc_group <- function(SpatInds, StatusInds, stk_status, stk_name, species_name){
        yaxs = "r",
        cex.axis = 1.5, 
        cex.lab = 1.5)
-  mytitle = paste0("ROC: Indicators vs ", stk_status," (",species_name,")
-", min(yrs), "-", max(yrs), " (Q", qrs_text, ")")
-  mysubtitle = paste0("Stock: ", stk_name)
-  title(main = mytitle,
+  
+  if(missing(survey_index)|missing(survey_name)==TRUE){
+    title = paste0("ROC: Indicators vs ", stk_status," (",species_name,")
+  ", min(yrs), "-", max(yrs), " (Q", qrs_text, ")")
+  }
+  title = paste0("ROC: Indicators vs ", stk_status," (",species_name,")
+  Survey Index: ", survey_index, ", Survey: ", survey_name, " (", min(yrs), "-", max(yrs), ", Q", qrs_text, ")")
+  
+  subtitle = paste0("Stock: ", stk_name)
+  
+  title(main = title,
         cex.main = 1.8,
         adj = 0,
         line = 1)
-  title(sub = mysubtitle,
+  title(sub = subtitle,
         cex.sub = 1.5,
         adj = 0.95,
         line = -2)
@@ -311,7 +318,7 @@ tss_group <- function(SpatInds, StatusInds, stk_status, stk_name, species_name){
 
 # for plotting the true skill score of multiple spatial indicators on one plot 
 # currenly uses roc_fun within this function. Use tss_group2 to use roc_fun2.
-tss_group <- function(SpatInds, StatusInds, stk_status, stk_name, species_name){
+tss_group2 <- function(SpatInds, StatusInds, stk_status, stk_name, species_name){
   cols <- 2
   stack <- 0.95
   
