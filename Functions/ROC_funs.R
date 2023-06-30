@@ -318,7 +318,7 @@ tss_group <- function(SpatInds, StatusInds, stk_status, stk_name, species_name){
 
 # for plotting the true skill score of multiple spatial indicators on one plot 
 # currenly uses roc_fun within this function. Use tss_group2 to use roc_fun2.
-tss_group2 <- function(SpatInds, StatusInds, stk_status, stk_name, species_name){
+tss_group2 <- function(SpatInds, StatusInds, stk_status, stk_name, species_name, survey_index, survey_name){
   cols <- 2
   stack <- 0.95
   
@@ -335,15 +335,20 @@ tss_group2 <- function(SpatInds, StatusInds, stk_status, stk_name, species_name)
        yaxs = "r",
        cex.axis = 1.5, 
        cex.lab = 1.5)
-  #mytitle = paste0("True Skill Score: Indicators vs ", stk_status," (",species$spcs,")", min(yrs), "-", max(yrs), " (Q", qrs_text, ")")
-  mytitle = paste0("True Skill Score: Indicators vs ", stk_status," (",species_name,")
-", min(yrs), "-", max(yrs), " (Q", qrs_text, ")")
-  mysubtitle = paste0("Stock: ", stk_name)
-  title(main = mytitle,
+  if(missing(survey_index)|missing(survey_name)==TRUE){
+    title = paste0("ROC: Indicators vs ", stk_status," (",species_name,")
+  ", min(yrs), "-", max(yrs), " (Q", qrs_text, ")")
+  }
+  title = paste0("True Skill Score: Indicators vs ", stk_status," (",species_name,")
+  Survey Index: ", survey_index, ", Survey: ", survey_name, " (", min(yrs), "-", max(yrs), ", Q", qrs_text, ")")
+  
+  subtitle = paste0("Stock: ", stk_name)
+  
+  title(main = title,
         cex.main = 1.8,
         adj = 0,
         line = 1)
-  title(sub = mysubtitle,
+  title(sub = subtitle,
         cex.sub = 1.5,
         adj = 0.95,
         line = -2)
@@ -364,14 +369,15 @@ tss_group2 <- function(SpatInds, StatusInds, stk_status, stk_name, species_name)
     all_data[ncol(all_data)+1] <- all_data[stk_status] # copies status to end column
     colnames(all_data)[ncol(all_data)] <- "state"      # changes name of end column
     
+    # call to roc_fun
     roc <- roc_fun2(all_data, 
                    state = state, 
                    ind = ind)
   
+    # retrieving the optimum spatial indicator threshold
     opt_thresh <- order(roc[,"TSS"],decreasing = T)[1]
     opt_threshx <- as.data.frame(roc[opt_thresh, "ind"])
     opt_threshy <- round(as.data.frame(roc[opt_thresh, "TSS"]),2)
-    
     
     lines(roc$ind, roc$TSS, type = "l", col = cols, lwd = 2)
     legend(legend = stk_index, 
@@ -383,15 +389,19 @@ tss_group2 <- function(SpatInds, StatusInds, stk_status, stk_name, species_name)
            inset = c(-0.2,0))
     
     par(xpd = F)
+    # plot the optimum thrreshold
     abline(v = opt_threshx, col = alpha(cols, 0.5), lty = 2, alpha = 0.5)
+    # add optimum threshold value
     text(opt_threshx, opt_threshy+0.06, labels = opt_threshy)
+    # place a point at the optimum threshold
     points(opt_threshx, opt_threshy, labels = opt_threshy, pch = 19)
     
+    # manual legend title
     mtext(text = "Spatial Indicator", line = -4, at = 1.2, cex = 1.5)
-
+    # change colour for each spatial indicator
     cols <- cols+1
+    # adjust poisiton of each legend output manually
     stack <- stack-0.12
-    
   }
   return(p)
 }                     
