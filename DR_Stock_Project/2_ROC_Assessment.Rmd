@@ -47,6 +47,7 @@ rm(pckgs, pkg)
 ```{r funs, cache = F}
 source(paste0(getwd(), "/Functions/dataprep_funs.R")) # for dealing with datras data
 source(paste0(getwd(), "/Functions/spatinds_funs.R")) # for computing spatial indicators
+source(paste0(getwd(), "/Functions/ROC_funs.R"))      # for ROC and TSS
 ```
 
 # Load in Data
@@ -66,7 +67,8 @@ ices_divs <- makeReadableFortify(ices_divs2)
 rm(ices_divs2)
 ```
 
-### Plot Divisions
+### Plot Divisions (FIX)
+!! The x y coordinates of the shapefiles are currently on different scales and cannot be overlapped using the method with the old ICES Divisions shapefile
 ```{r}
 ### Check that divisions and rectangles look appropriate
 ggplot() +
@@ -85,16 +87,16 @@ Load in the survey data previously downloaded and processed in `1_Download_Surve
 surveydata.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/Survey Data/"
 
 # We don't need to load these in for now
-load(paste0(surveydata.path, "NS-IBTS/ns_ibts.data.rda"))   # NS-IBTS
-load(paste0(surveydata.path, "BTS/bts.data.rda"))           # BTS
-load(paste0(surveydata.path, "BTS-Isis/bts_isis.data.rda")) # BTS-Isis
-load(paste0(surveydata.path, "UK-BTS/uk_bts.data.rda"))     # UK-BTS
-load(paste0(surveydata.path, "DYFS/dyfs.data.rda"))         # DYFS
-load(paste0(surveydata.path, "FR-CGFS/fr_cgfs.data.rda"))   # FR-CGFS
-load(paste0(surveydata.path, "IE-IGFS/ie_igfs.data.rda"))   # IE-IGFS
-load(paste0(surveydata.path, "SCOWCGFS/scowcgfs.data.rda")) # SCOWCGFS
-load(paste0(surveydata.path, "SNS/sns.data.rda"))           # SNS
-load(paste0(surveydata.path, "SWC-IBTS/swc_ibts.data.rda")) # SWC-IBTS
+#load(paste0(surveydata.path, "NS-IBTS/ns_ibts.data.rda"))   # NS-IBTS
+#load(paste0(surveydata.path, "BTS/bts.data.rda"))           # BTS
+#load(paste0(surveydata.path, "BTS-Isis/bts_isis.data.rda")) # BTS-Isis
+#load(paste0(surveydata.path, "UK-BTS/uk_bts.data.rda"))     # UK-BTS
+#load(paste0(surveydata.path, "DYFS/dyfs.data.rda"))         # DYFS
+#load(paste0(surveydata.path, "FR-CGFS/fr_cgfs.data.rda"))   # FR-CGFS
+#load(paste0(surveydata.path, "IE-IGFS/ie_igfs.data.rda"))   # IE-IGFS
+#load(paste0(surveydata.path, "SCOWCGFS/scowcgfs.data.rda")) # SCOWCGFS
+#load(paste0(surveydata.path, "SNS/sns.data.rda"))           # SNS
+#load(paste0(surveydata.path, "SWC-IBTS/swc_ibts.data.rda")) # SWC-IBTS
 ```
 
 ## Stock Objects
@@ -123,8 +125,8 @@ Change `stk` and `stk.chr` to the stock you want to run the ROC analysis for.
 ### Stocks available
 unique(allstk_metadata$stk_id) # ignore so.27.7d for now, need to find YFS survey data
 ### Select the stock to analyse
-stk <- wit.27.3a47d
-stk.chr <- "wit.27.3a47d"
+stk <- ple.27.420
+stk.chr <- "ple.27.420"
 ```
 
 ### Species Name
@@ -151,6 +153,10 @@ rm(stk_divs2)
 
 print(paste0("ICES Divisions for ", species$spcs_name, " (", stk.chr, ") :"))
 print(stk_divs)
+
+### check stk_divs are in the ices_rect and ices_divs
+stk_divs %in% ices_rect$Area_27
+stk_divs %in% ices_divs$Area_27
 ```
 
 
@@ -162,16 +168,18 @@ stk_refpts <- allstk_refpts %>% filter(
 print(stk_refpts)
 ```
 
-### Survey Information
+## Survey Information
 These are the surveys that were used in the most recent assessment and mentioned on the ICES advice sheets for the corresponding stock. Most stocks have more than survey index incorperated within the stock assessment. Each individual survey index can also use multiple sources of survey data. E.g. a Q3 survey index might use and combine data from NS-IBTS Q3 and BTS Q3.
+
+### `stk_surveys`
 ```{r get.surveyinfo}
-# get survey information for the current stock we are looking at
+### Get survey information for the current stock we are looking at
 stk_surveys <- allstk_metadata %>% filter(
   stk_id == stk.chr) %>%
   select(-description, -date_published)
 print(stk_surveys)
 ```
-
+### `data.list`
 There are many survey indices used, each using survey data from different year ranges and different quarters. In the spatial indicator analysis we will try to use the exact same range of survey data that was used in the stock assessments for each stock. This will ensure that the survey data used in the spatial analysis matches the data used in the stock assessment.
 ```{r}
 ### Select the surveys used within the stock assessment
@@ -193,22 +201,23 @@ for(survey in unique(stk_surveys$survey_name)){
 
 ### Check that surveys loaded are what we expect
 summary(data.list)
-unique(stk_surveys$survey_name)
+row.names(summary(data.list)) %in% unique(stk_surveys$survey_name) # should be TRUE
 ```
-Each survey within `data.list` contains the `hh`, `hl`, `ca` and combined `hlhh` data that was constructed in the data processing used `prepsurveydata`. We will mostly be working with the `hlhh` data but the rest is there for convenience.
+Each survey within `data.list` contains the `hh`, `hl`, `ca` and combined `hlhh` data that was constructed in the data processing using `prepsurveydata`. We will mostly be working with the `hlhh` data but the rest is there for convenience.
 
-
+### `stk_surveys_indices` (might not need)
 Some surveys are combined to form one index as previously mentioned (e.g. IBTS Q3 and BTS Q3 might be combined to form a Q3 Survey Index)
 ```{r}
 ### Get the name of the individual indexes used in the stock assessment
 ### Each index can be comprised of multiple survey data sources 
-# Get the name of the survey indices used in the stock assessment:
+### Get the name of the survey indices used in the stock assessment:
 stk_surveys_indices <- allstk_metadata %>% filter(
   stk_id == stk.chr) %>%
   select(survey_index) %>%
   unique()
 print(stk_surveys_indices)
 ```
+### `stk_data_filtered`
 We will now filter the survey data in accordance to the data used within each survey index. Sometimes the exact date ranges of survey data is not given in the stock assessment advice sheets. I have made the assumption that where the end year of the survey data used is not given, data up to the most recent data is used. Similarly, if the start year of survey data used is not given, data is used from the beginning of the survey data time series i.e. when the survey began. This latter assumption will need to be double checked as often older survey data is omitted due to differences in sampling effort or design compared to the most recent data.
 ```{r}
 ### Get the survey data used in each index and filter it so that it matches
@@ -262,221 +271,180 @@ for(indx in stk_surveys_indices$survey_index){
     stk_data_filtered[[indx]][[survey]] <- list(hlhh = hlhh, hl = hl, hh = hh, ca = ca)
   }
 }
-
-### Check survey indices are what we expected
-## These should match
-summary(stk_data_filtered)
-stk_surveys_indices$survey_index
-## Check the years and quarters match
-
-# for index 1, survey 1
-# are the start and end years the same?
-## will give NA is missing from stk_surveys
-unique(stk_data_filtered[[1]][[1]]$hlhh$Year)
-min(stk_data_filtered[[1]][[1]]$hlhh$Year)==stk_surveys$survey_yrs_start[1]
-max(stk_data_filtered[[1]][[1]]$hlhh$Year)==stk_surveys$survey_yrs_end[1]
-
-unique(stk_data_filtered[[1]][[1]]$hlhh$Quarter)
-unique(stk_data_filtered[[1]][[1]]$hlhh$Quarter) == stk_surveys$survey_qrs[1]
 ```
 
-Check that data was handled and filtered correctly
-```{r data.check, eval = F}
-# This is for plaice only
-### Check that data was handled correctly
-#### BTS+IBTS Q3 index, BTS survey
-unique(stk_data_filtered$`BTS+IBTS Q3`$BTS$hlhh$Year)
-unique(stk_data_filtered$`BTS+IBTS Q3`$BTS$hlhh$Quarter)
-#### Check match up with stk_survey data
-stk_surveys %>%
-  filter(survey_index == "BTS+IBTS Q3",
-         survey_name == "BTS") %>%
-  select(survey_index, survey_name, survey_yrs_start, survey_yrs_end, survey_qrs)
-
-
-#### BTS+IBTS Q3 index, NS-IBTS survey
-unique(stk_data_filtered$`BTS+IBTS Q3`$`NS-IBTS`$hlhh$Year)
-unique(stk_data_filtered$`BTS+IBTS Q3`$`NS-IBTS`$hlhh$Quarter)
-#### Check match up with stk_survey data
-stk_surveys %>%
-  filter(survey_index == "BTS+IBTS Q3",
-         survey_name == "NS-IBTS") %>%
-  select(survey_index, survey_name, survey_yrs_start, survey_yrs_end, survey_qrs)
-
-
-#### BTS-Isis index, BTS survey
-unique(stk_data_filtered$`BTS-Isis`$`BTS-Isis`$hlhh$Year)
-unique(stk_data_filtered$`BTS-Isis`$`BTS-Isis`$hlhh$Quarter)
-#### Check match up with stk_survey data
-stk_surveys %>%
-  filter(survey_index == "BTS-Isis",
-         survey_name == "BTS-Isis") %>%
-  select(survey_index, survey_name, survey_yrs_start, survey_yrs_end, survey_qrs)
-
-
-#### SNS1 index, SNS survey
-unique(stk_data_filtered$`SNS1`$`SNS`$hlhh$Year)
-unique(stk_data_filtered$`SNS1`$`SNS`$hlhh$Quarter)
-#### Check match up with stk_survey data
-stk_surveys %>%
-  filter(survey_index == "SNS1",
-         survey_name == "SNS") %>%
-  select(survey_index, survey_name, survey_yrs_start, survey_yrs_end, survey_qrs)
-
-
-#### SNS2 index, SNS survey
-unique(stk_data_filtered$`SNS2`$`SNS`$hlhh$Year)
-unique(stk_data_filtered$`SNS2`$`SNS`$hlhh$Quarter)
-#### Check match up with stk_survey data
-stk_surveys %>%
-  filter(survey_index == "SNS2",
-         survey_name == "SNS") %>%
-  select(survey_index, survey_name, survey_yrs_start, survey_yrs_end, survey_qrs)
+Check that `stk_filtered_data` has been filtered to what we expect from the excel spreadsheet we imported and filtered earlier (`stk_surveys`)
+```{r}
+### Check data has been filtered to the correct index, survey, years, and quarters
+for(indx in 1:length(stk_data_filtered)){
+  # get survey index name from data
+  message(paste0("Survey Index:             ", names(stk_data_filtered[indx])))
+  # does this match with the excel doc
+  print(noquote(paste0("Survey index matches? ", names(stk_data_filtered[indx]) %in% stk_surveys$survey_index)))
+  for(survey in 1:length(stk_data_filtered[[indx]])){
+    # get survey name within this survey index
+    print(noquote(paste0("  Survey:             ", names(stk_data_filtered[[indx]][survey]))))
+    # does this survey match with exceld doc
+    print(noquote(paste0("  Survey matches?     ", names(stk_data_filtered[[indx]][survey]) ==
+                           stk_surveys[stk_surveys$survey_index==names(stk_data_filtered[indx]) & 
+                           stk_surveys$survey_name==names(stk_data_filtered[[indx]][survey]), "survey_name"])))
+    # get survey data years from the dataset
+    print(noquote(paste0("  Survey years:       ", min(stk_data_filtered[[indx]][[survey]]$hlhh$Year), "-", max(stk_data_filtered[[indx]][[survey]]$hlhh$Year))))
+    # does this match with the start and end years in the excel doc
+    print(noquote(paste0("  Start year matches? ", 
+                         min(stk_data_filtered[[indx]][[survey]]$hlhh$Year) == 
+                           stk_surveys[stk_surveys$survey_index==names(stk_data_filtered[indx]) & 
+                           stk_surveys$survey_name==names(stk_data_filtered[[indx]][survey]), "survey_yrs_start"])))
+    print(noquote(paste0("  End year matches?   ", 
+                         max(stk_data_filtered[[indx]][[survey]]$hlhh$Year) == 
+                           stk_surveys[stk_surveys$survey_index==names(stk_data_filtered[indx]) & 
+                           stk_surveys$survey_name==names(stk_data_filtered[[indx]][survey]), "survey_yrs_end"])))
+    # get survey quarters from the dataset
+    print(noquote(paste0("  Survey quarters:    ", unique(stk_data_filtered[[indx]][[survey]]$hlhh$Quarter))))
+    # does this match with the survey quarters in the excel doc
+    print(noquote(paste0("  Quarters match?     ", 
+                         unique(stk_data_filtered[[indx]][[survey]]$hlhh$Quarter) == 
+                           stk_surveys[stk_surveys$survey_index==names(stk_data_filtered[indx]) & 
+                           stk_surveys$survey_name==names(stk_data_filtered[[indx]][survey]), "survey_qrs"])))
+    print(noquote("---------------------------"))
+  }
+}
 ```
+
 
 ## Calculate Spatial Indicators
-For each stock I will need to calculate spatial indicators for each survey index used in the stock assessment. Some survey indices combine multiple sources of survey data e.g. `IBTS+BTS Q3`
-
-Check previously set parameters
+Here we calculate time-series of spatial indicators and plot this time series. This will be done for each individual survey within each survey index. We will be using the `stk-filtered-data` so that we are calculating spatial indicators using he same years and quarters of survey data that are used within the ICES stock assessments. 
 ```{r}
-species$spcs_name
-species_aphia
-stk_divs
-```
-
-
-```{r}
+### Output path to save data and plots
+## Keeping this to my one drive, files may be too large for GitHub
 si.output.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/10Stock_Outputs/"
 
-#1:length(stk_data_filtered)
-for(i in 1:length(stk_data_filtered)){
-  indx <- stk_data_filtered[i] # for each survey index
-  message(paste0("Survey Index: ", names(indx)))
-  for(j in 1:length(indx)){
-    survy <- indx[[j]]        # for each survey within each survey index
-    for(w in 1:length(survy)){
-      message(paste0("Survey: ", names(survy[w])))
-      print(survy[[w]])
-      hlhh <- survy[[w]]$hlhh # get hlhh data for each survey within each index
-      hh <- survy[[w]]$hh
-      yrs <- unique(hlhh$Year)
-      qrs <- unique(hlhh$Quarter)
-      print(paste0("Survey years: ", min(yrs), "-", max(yrs)))
-      print(paste0("Survey quarters: ", qrs))
-################################################################################
-### Calculate spatial indicators for each survey
-      message("Calculating spatial indicators")
-      ### Positive Area (by ICES rectangle)
-      print("Positive Area (Rectangle)")
-      np.rects <- pa_rect(hh = hh, 
-              hlhh = hlhh, 
-              yrs = yrs, 
-              qrs = qrs, 
-              species_aphia = species_aphia, 
-              stk_regions = stk_divs)
-      
-      ### Positive Area (by Haul)
-      print("Positive Area (Haul)")
-      np.hauls <- pa_haul(hh = hh, 
-              hlhh = hlhh, 
-              yrs = yrs, 
-              qrs = qrs, 
-              species_aphia = species_aphia, 
-              stk_regions = stk_divs)
-      
-      ### Lorenz curve data
-      print("Lorenz Curve")
-      lorenz <- lorenz_data(hlhh = hlhh, 
-              yrs = yrs, 
-              qrs = qrs, 
-              species_aphia = species_aphia, 
-              stk_regions = stk_divs)
-      #### Gini index
-      print("Gini Index")
-      Gini.index <- Gini(lorenz)
-      ##### Take inverse of Gini, so high numbers = good
-      Gini.index$G <- 1- Gini.index$G
-      #### D95
-      print("D95")
-      D95 <- d95(lorenz)
-      
-      ### Spread of Participation Index (SPI)
-      #### Prep data
-      print("Sprea of Participation Index")
-      spi_data <- spi_prep(hlhh = hlhh, 
-              yrs = yrs, 
-              qrs = qrs, 
-              species_aphia = species_aphia, 
-              stk_regions = stk_divs)
-      #### Calculate
-      spi <- spi_data %>% group_by(Year) %>% # Year only, not quarter
-        filter(Area_27 %in% stk_divs) %>%
-        summarise(SPI = spi_calc(TotalNo_TotalDur, area = 1)) ## all areas equal weight
-      #### Take inverse of SPI, so high numbers = good
-      spi$SPI <- 1-spi$SPI 
-################################################################################
-      # Merge all spatial indicator values into a single data frame
-      message("Merging and saving spatial indicator data")
-      Gini.index <- Gini.index[c("Year", "G")]
-      D95 <- D95[c("Year", "D95")]
-      np.hauls <- np.hauls[c("Year", "PosArea")]
-      np.rects <- np.rects[c("Year", "PosArea")]
-      spi <- spi[c("Year", "SPI")]
-      
-      si <- Reduce(function(x, y) merge(x, y, by = "Year"), list(Gini.index, D95, np.hauls, np.rects, spi))
-      
-      colnames(si)[2] <- "Gini Index"
-      colnames(si)[4] <- "Positve Area (Rectangle)"
-      colnames(si)[5] <- "Positive Area (Haul)"
-      
+### Check data has been filtered to the correct index, survey, years, and quarters
+for(indx in 1:length(stk_data_filtered)){
+  for(survey in 1:length(stk_data_filtered[[indx]])){
+    # get survey name within this survey index
+    message(names(stk_data_filtered[indx]))
+    print(noquote(paste0("Survey Index:       ", names(stk_data_filtered[indx]))))
+    print(noquote(paste0("Survey:             ", names(stk_data_filtered[[indx]][survey]))))
+    # get filtered survey data
+    hlhh <- stk_data_filtered[[indx]][[survey]]$hlhh
+    hh <- stk_data_filtered[[indx]][[survey]]$hh
+    yrs <- unique(hlhh$Year)
+    qrs <- unique(hlhh$Quarter)
+    print(noquote(paste0("Survey years:       ", min(yrs), "-", max(yrs))))
+    print(noquote(paste0("Survey quarters:    ", qrs)))
+    
+    ### Calculate spatial indicators for each survey
+    message("Calculating spatial indicators")
+    ### Positive Area (by ICES rectangle)
+    print(noquote("Positive Area (Rectangle)"))
+    np.rects <- pa_rect(hh = hh, 
+            hlhh = hlhh, 
+            yrs = yrs, 
+            qrs = qrs, 
+            species_aphia = species_aphia, 
+            stk_regions = stk_divs)
 
-
-# Create directory
-    if(dir.exists(paste0(si.output.path, stk.chr)) == FALSE){
-      dir.create(paste0(si.output.path, stk.chr))
-    }
-    if(dir.exists(paste0(si.output.path, stk.chr, "/", names(indx))) == FALSE){
-      dir.create(paste0(si.output.path, stk.chr, "/", names(indx)))
-    }
-    if(dir.exists(paste0(si.output.path, stk.chr, "/", names(indx), "/", names(survy[w]))) == FALSE){
-      dir.create(paste0(si.output.path, stk.chr, "/", names(indx), "/", names(survy[w])))
-    }
-      si.save.path <- paste0(si.output.path, stk.chr, "/", names(indx), "/", names(survy[w]))
-      
-    if(dir.exists(paste0(si.save.path, "/SpatIndData")) == FALSE){
-      dir.create(paste0(si.save.path, "/SpatIndData"))
-    }  
-      
-      
-    save(si, file = paste0(si.save.path, "/SpatIndData/SpatIndData - ", stk.chr, " - ", names(indx), " - ", names(survy[w]), ".rda"))
- 
+    ### Positive Area (by Haul)
+    print(noquote("Positive Area (Haul)"))
+    np.hauls <- pa_haul(hh = hh, 
+            hlhh = hlhh, 
+            yrs = yrs, 
+            qrs = qrs, 
+            species_aphia = species_aphia, 
+            stk_regions = stk_divs)
+    
+    ### Lorenz curve data
+    print(noquote("Lorenz Curve"))
+    lorenz <- lorenz_data(hlhh = hlhh, 
+            yrs = yrs, 
+            qrs = qrs, 
+            species_aphia = species_aphia, 
+            stk_regions = stk_divs)
+    #### Gini index
+    print(noquote("Gini Index"))
+    Gini.index <- Gini(lorenz)
+    ##### Take inverse of Gini, so high numbers = good
+    Gini.index$G <- 1- Gini.index$G
+    #### D95
+    print(noquote("D95"))
+    D95 <- d95(lorenz)
+    
+    ### Spread of Participation Index (SPI)
+    #### Prep data
+    print(noquote("Spread of Participation Index"))
+    spi_data <- spi_prep(hlhh = hlhh, 
+            yrs = yrs, 
+            qrs = qrs, 
+            species_aphia = species_aphia, 
+            stk_regions = stk_divs)
+    #### Calculate
+    spi <- spi_data %>% group_by(Year) %>% # Year only, not quarter
+      filter(Area_27 %in% stk_divs) %>%
+      summarise(SPI = spi_calc(TotalNo_TotalDur, area = 1)) ## all areas equal weight
+    #### Take inverse of SPI, so high numbers = good
+    spi$SPI <- 1-spi$SPI 
 ################################################################################
-      ### Plot
-    message("Plotting spatial indictaor time series")
-      #### Create directory
-    if(dir.exists(paste0(si.save.path, "/SpatIndPlot")) == FALSE){
-      dir.create(paste0(si.save.path, "/SpatIndPlot"))
-    } 
-      #### convert data frame to long format
-      si_long <- si %>% tidyr::pivot_longer(cols = c("Gini Index", "D95", "Positve Area (Rectangle)", "Positive Area (Haul)", "SPI" ), 
-                              names_to = "Indicator",
-                              values_to = "Value")
-      #### create the plot
-      si_plot <- ggplot() +
-        geom_line(data = si_long, aes(x = Year, y = Value, group = Indicator, colour = Indicator)) +
-        labs(title = paste0("Spatial Indicators for ", stk.chr,
-" | Survey Index: ", names(indx), " | Survey: ", names(survy[w]), " (", min(yrs), "-", max(yrs), ", Q", qrs, ")")) +
-        theme(plot.title = element_text(size = 8)) +
-        coord_cartesian(ylim = c(0,1))
-      ### save plot
-      cowplot::save_plot(plot = si_plot, filename = paste0(si.save.path, "/SpatIndPlot/SpatIndPlot - ", stk.chr, " - ", names(indx), " - ", names(survy[w]), ".png"))
+    ### Merge all spatial indicator values into a single data frame
+    message("Merging and saving spatial indicator data...")
+    ## select the columns that we need
+    Gini.index <- Gini.index[c("Year", "G")]
+    D95 <- D95[c("Year", "D95")]
+    np.hauls <- np.hauls[c("Year", "PosArea")]
+    np.rects <- np.rects[c("Year", "PosArea")]
+    spi <- spi[c("Year", "SPI")]
+    ## merge
+    si <- Reduce(function(x, y) merge(x, y, by = "Year"), list(Gini.index, D95, np.hauls, np.rects, spi))
+    ## rename some columns
+    colnames(si)[2] <- "Gini Index"
+    colnames(si)[4] <- "Positve Area (Rectangle)"
+    colnames(si)[5] <- "Positive Area (Haul)"
+    
+  ### Save
+  ## Create directories
+  if(dir.exists(paste0(si.output.path, stk.chr)) == FALSE){
+    dir.create(paste0(si.output.path, stk.chr))
+  }
+  if(dir.exists(paste0(si.output.path, stk.chr, "/", names(stk_data_filtered[indx]))) == FALSE){
+    dir.create(paste0(si.output.path, stk.chr, "/", names(stk_data_filtered[indx])))
+  }
+  if(dir.exists(paste0(si.output.path, stk.chr, "/", names(stk_data_filtered[indx]), "/", names(stk_data_filtered[[indx]][survey]))) == FALSE){
+    dir.create(paste0(si.output.path, stk.chr, "/", names(stk_data_filtered[indx]), "/", names(stk_data_filtered[[indx]][survey])))
+  }
+    si.save.path <- paste0(si.output.path, stk.chr, "/", names(stk_data_filtered[indx]), "/", names(stk_data_filtered[[indx]][survey]))
+    
+  if(dir.exists(paste0(si.save.path, "/SpatIndData")) == FALSE){
+    dir.create(paste0(si.save.path, "/SpatIndData"))
+  }  
+  save(si, file = paste0(si.save.path, "/SpatIndData/SpatIndData - ", stk.chr, " - ", names(stk_data_filtered[indx]), " - ", names(stk_data_filtered[[indx]][survey]), ".rda"))
+
+  ### Plot
+  message("Plotting spatial indictaor time series...")
+  ## Create directory
+  if(dir.exists(paste0(si.save.path, "/SpatIndPlot")) == FALSE){
+    dir.create(paste0(si.save.path, "/SpatIndPlot"))
+  } 
+    ## convert data frame to long format
+    si_long <- si %>% tidyr::pivot_longer(cols = c("Gini Index", "D95", "Positve Area (Rectangle)", "Positive Area (Haul)", "SPI" ), 
+                            names_to = "Indicator",
+                            values_to = "Value")
+    ## create the plot
+    si_plot <- ggplot() +
+      geom_line(data = si_long, aes(x = Year, y = Value, group = Indicator, colour = Indicator)) +
+      labs(title = paste0("Spatial Indicators for ", stk.chr,
+" | Survey Index: ", names(stk_data_filtered[indx]), " | Survey: ", names(stk_data_filtered[[indx]][survey]), " (", min(yrs), "-", max(yrs), ", Q", qrs, ")")) +
+      theme(plot.title = element_text(size = 8)) +
+      coord_cartesian(ylim = c(0,1))
+    ## save plot
+    cowplot::save_plot(plot = si_plot, filename = paste0(si.save.path, "/SpatIndPlot/SpatIndPlot - ", stk.chr, " - ", names(stk_data_filtered[indx]), " - ", names(stk_data_filtered[[indx]][survey]), ".png"))
+    print(noquote("-------------------------------"))
       
-    }
   }
 }
 ```
 
 ## ROC Curve and TSS Plot
+Now we use the spatial indicator times series data, along with the stock assessment data to calculate and plot the ROC curves and TSS. Again, this is done for each survey within each survey index.
 ```{r}
 si.stk.path <- paste0("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/10Stock_Outputs/", stk.chr, "/")
 
@@ -493,13 +461,14 @@ for(IndexFolder in list.files(si.stk.path)){
       yrs <- si$Year
       print(paste0(SurveyFolder, " survey years included in ", IndexFolder, " survey abundance index for ", stk.chr, ": ", min(yrs), " to ", max(yrs)))
       
-      ## SSB/MSY Btrigger
+      # Calculate SSB/MSY Btrigger
       msybtrig_refpt <- allstk_refpts$MSY_Btrigger[allstk_refpts$stk_name == stk.chr]
       ssb.msybtrig <- as.data.frame(ssb(stk)/msybtrig_refpt) %>%
         filter(year %in% yrs) %>%
         select(year, data) %>%
         rename(Year = year, SSB.MSYBtrigger = data)
       
+      # !! for later...not yet used
       fmsy_refpt <- allstk_refpts$FMSY[allstk_refpts$stk_name == stk.chr]
       
       # Path location
@@ -523,14 +492,17 @@ for(IndexFolder in list.files(si.stk.path)){
             StatusInds = ssb.msybtrig, 
             stk_status = "SSB.MSYBtrigger",
             stk_name = stk.chr,
-            species_name = species$spcs_name)
+            species_name = species$spcs_name,
+            survey_index = IndexFolder,
+            survey_name = SurveyFolder)
+
   
       dev.off()
       
       # Plot and save TSS plot
       png(paste0(path.roc, "/TSS/", stk.chr, " - ", IndexFolder, " - ", SurveyFolder, "TSS.png"), width = 900, height = 600)
       
-      tss_group(SpatInds = si,
+      tss_group2(SpatInds = si,
                 StatusInds = ssb.msybtrig,
                 stk_status = "SSB.MSYBtrigger",
                 stk_name = stk.chr,
@@ -542,6 +514,7 @@ for(IndexFolder in list.files(si.stk.path)){
   }
 }
 ```
+
 ## Dev
 ```{r}
  ### Lorenz curve data
