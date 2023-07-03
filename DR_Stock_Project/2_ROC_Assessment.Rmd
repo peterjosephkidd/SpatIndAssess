@@ -103,7 +103,6 @@ surveydata.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Sp
 Load in the stock assessment objects:
 ```{r}
 stockobj.path <- paste0(getwd(), "/Data/DR_Stocks/Stock_Objects/")
-
 for(stockfile in list.files(stockobj.path)){
   load(paste0(stockobj.path, stockfile))
 }
@@ -113,7 +112,6 @@ for(stockfile in list.files(stockobj.path)){
 I have manually taken information from the advice sheets and put it into a Excel document
 ```{r}
 allstk_metadata <- read_excel(paste0(getwd(), "/Data/DR_Stocks/Advice_Sheets/stock_metadata_refpts.xlsx"), sheet = "stk_metadata")
-
 allstk_refpts <- read_excel(paste0(getwd(), "/Data/DR_Stocks/Advice_Sheets/stock_metadata_refpts.xlsx"), sheet = "stk_refpts")
 ```
 
@@ -125,8 +123,8 @@ Change `stk` and `stk.chr` to the stock you want to run the ROC analysis for.
 ### Stocks available
 unique(allstk_metadata$stk_id) # ignore so.27.7d for now, need to find YFS survey data
 ### Select the stock to analyse
-stk <- ple.27.420
-stk.chr <- "ple.27.420"
+stk <- tur.27.4
+stk.chr <- "tur.27.4"
 ```
 
 ### Species Name
@@ -319,7 +317,7 @@ Here we calculate time-series of spatial indicators and plot this time series. T
 ## Keeping this to my one drive, files may be too large for GitHub
 si.output.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/10Stock_Outputs/"
 
-### Check data has been filtered to the correct index, survey, years, and quarters
+### Calculate spatial indicators for every year in each individual time series of survey data
 for(indx in 1:length(stk_data_filtered)){
   for(survey in 1:length(stk_data_filtered[[indx]])){
     # get survey name within this survey index
@@ -343,7 +341,7 @@ for(indx in 1:length(stk_data_filtered)){
             yrs = yrs, 
             qrs = qrs, 
             species_aphia = species_aphia, 
-            stk_regions = stk_divs)
+            stk_divs = stk_divs)
 
     ### Positive Area (by Haul)
     print(noquote("Positive Area (Haul)"))
@@ -352,7 +350,7 @@ for(indx in 1:length(stk_data_filtered)){
             yrs = yrs, 
             qrs = qrs, 
             species_aphia = species_aphia, 
-            stk_regions = stk_divs)
+            stk_divs = stk_divs)
     
     ### Lorenz curve data
     print(noquote("Lorenz Curve"))
@@ -360,12 +358,11 @@ for(indx in 1:length(stk_data_filtered)){
             yrs = yrs, 
             qrs = qrs, 
             species_aphia = species_aphia, 
-            stk_regions = stk_divs)
+            stk_divs = stk_divs)
     #### Gini index
     print(noquote("Gini Index"))
     Gini.index <- Gini(lorenz)
-    ##### Take inverse of Gini, so high numbers = good
-    Gini.index$G <- 1- Gini.index$G
+
     #### D95
     print(noquote("D95"))
     D95 <- d95(lorenz)
@@ -377,18 +374,19 @@ for(indx in 1:length(stk_data_filtered)){
             yrs = yrs, 
             qrs = qrs, 
             species_aphia = species_aphia, 
-            stk_regions = stk_divs)
+            stk_divs = stk_divs)
     #### Calculate
     spi <- spi_data %>% group_by(Year) %>% # Year only, not quarter
       filter(Area_27 %in% stk_divs) %>%
       summarise(SPI = spi_calc(TotalNo_TotalDur, area = 1)) ## all areas equal weight
     #### Take inverse of SPI, so high numbers = good
     spi$SPI <- 1-spi$SPI 
+    spi$SPI[is.nan(spi$SPI)] <- 0 # change NaNs to 0 
 ################################################################################
     ### Merge all spatial indicator values into a single data frame
     message("Merging and saving spatial indicator data...")
     ## select the columns that we need
-    Gini.index <- Gini.index[c("Year", "G")]
+    Gini.index <- Gini.index[c("Year", "Gini Index")]
     D95 <- D95[c("Year", "D95")]
     np.hauls <- np.hauls[c("Year", "PosArea")]
     np.rects <- np.rects[c("Year", "PosArea")]
@@ -396,7 +394,7 @@ for(indx in 1:length(stk_data_filtered)){
     ## merge
     si <- Reduce(function(x, y) merge(x, y, by = "Year"), list(Gini.index, D95, np.hauls, np.rects, spi))
     ## rename some columns
-    colnames(si)[2] <- "Gini Index"
+    #colnames(si)[2] <- "Gini Index"
     colnames(si)[4] <- "Positve Area (Rectangle)"
     colnames(si)[5] <- "Positive Area (Haul)"
     
@@ -449,9 +447,9 @@ Now we use the spatial indicator times series data, along with the stock assessm
 si.stk.path <- paste0("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/10Stock_Outputs/", stk.chr, "/")
 
 for(IndexFolder in list.files(si.stk.path)){
-  print(paste0("Survey Index: ", IndexFolder))
+  message(paste0("Survey Index: ", IndexFolder))
   for(SurveyFolder in list.files(paste0(si.stk.path, IndexFolder, "/"))){
-    print(paste0("Survey: ", SurveyFolder))
+    print(noquote(paste0("Survey: ", SurveyFolder)))
     
       # Load Spatial Indicator Data
       si_file <- list.files(paste0(si.stk.path, IndexFolder, "/", SurveyFolder, "/SpatIndData/"), pattern = "*SpatIndData*")
@@ -459,7 +457,7 @@ for(IndexFolder in list.files(si.stk.path)){
       
       # Get stock assessment reference points
       yrs <- si$Year
-      print(paste0(SurveyFolder, " survey years included in ", IndexFolder, " survey abundance index for ", stk.chr, ": ", min(yrs), " to ", max(yrs)))
+      print(noquote(paste0("Survey years: ", min(yrs), " to ", max(yrs))))
       
       # Calculate SSB/MSY Btrigger
       msybtrig_refpt <- allstk_refpts$MSY_Btrigger[allstk_refpts$stk_name == stk.chr]
@@ -503,10 +501,12 @@ for(IndexFolder in list.files(si.stk.path)){
       png(paste0(path.roc, "/TSS/", stk.chr, " - ", IndexFolder, " - ", SurveyFolder, "TSS.png"), width = 900, height = 600)
       
       tss_group2(SpatInds = si,
-                StatusInds = ssb.msybtrig,
-                stk_status = "SSB.MSYBtrigger",
-                stk_name = stk.chr,
-                species_name = species$spcs_name)
+            StatusInds = ssb.msybtrig,
+            stk_status = "SSB.MSYBtrigger",
+            stk_name = stk.chr,
+            species_name = species$spcs_name,
+            survey_index = IndexFolder,
+            survey_name = SurveyFolder)
             
       dev.off()
 
@@ -515,22 +515,5 @@ for(IndexFolder in list.files(si.stk.path)){
 }
 ```
 
-## Dev
-```{r}
- ### Lorenz curve data
-      print("Lorenz Curve")
-      lorenz <- lorenz_data(hlhh = hlhh, 
-              yrs = yrs, 
-              qrs = qrs, 
-              species_aphia = species_aphia, 
-              stk_regions = stk_divs)
-      #### Gini index
-      print("Gini Index")
-      Gini.index <- Gini(lorenz)
-      ##### Take inverse of Gini, so high numbers = good
-      Gini.index$G <- 1- Gini.index$G
-      #### D95
-      print("D95")
-      D95 <- d95(lorenz)
-```
+
 
