@@ -71,9 +71,11 @@ save(ices_divs, file = paste0(getwd(), "/Data/ICES Divs/ices_divs.rds"))
 
 # Download, save, & process survey data
 ```{r}
+#### Save location
+surveydata.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/Survey Data/"
 ### Create directory for survey data
-if(dir.exists(surveydata.path2) == FALSE){
-  dir.create(surveydata.path2)
+if(dir.exists(surveydata.path) == FALSE){
+  dir.create(surveydata.path)
 }
 ```
 
@@ -90,21 +92,21 @@ ns_ibts.hh <- getDATRAS(record = "HH", "NS-IBTS", years = c(1966:2022), quarters
 ns_ibts.hl <- getDATRAS(record = "HL", "NS-IBTS", years = c(1966:2022), quarters = c(1,3))
 ns_ibts.ca <- getDATRAS(record = "CA", "NS-IBTS", years = c(1966:2022), quarters = c(1,3))
 
-#### Save
-surveydata.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/Survey Data/"
-surveydata.path2 <- paste0(getwd(), "/Data/Survey Data/")
-
 ### Create directory for NS-IBTS
-if(dir.exists(paste0(surveydata.path2, "NS-IBTS")) == FALSE){
-  dir.create(paste0(surveydata.path2, "NS-IBTS"))
+if(dir.exists(paste0(surveydata.path, "NS-IBTS")) == FALSE){
+  dir.create(paste0(surveydata.path, "NS-IBTS"))
 }
-save(ns_ibts.hh, file = paste0(surveydata.path2, "NS-IBTS/ns_ibts.hh.rda"))
-save(ns_ibts.hl, file = paste0(surveydata.path2, "NS-IBTS/ns_ibts.hl.rda"))
-save(ns_ibts.ca, file = paste0(surveydata.path2, "NS-IBTS/ns_ibts.ca.rda"))
+save(ns_ibts.hh, file = paste0(surveydata.path, "NS-IBTS/ns_ibts.hh.rda"))
+save(ns_ibts.hl, file = paste0(surveydata.path, "NS-IBTS/ns_ibts.hl.rda"))
+save(ns_ibts.ca, file = paste0(surveydata.path, "NS-IBTS/ns_ibts.ca.rda"))
 
 #### Processing NS-IBTS
+load(paste0(surveydata.path, "NS-IBTS/ns_ibts.hh.rda"))
+load(paste0(surveydata.path, "NS-IBTS/ns_ibts.hl.rda"))
+load(paste0(surveydata.path, "NS-IBTS/ns_ibts.ca.rda"))
+
 ns_ibts.data <- prepsurveydata(ns_ibts.hh, ns_ibts.hl, ns_ibts.ca, ices_rect)
-save(ns_ibts.data, file = paste0(surveydata.path2, "NS-IBTS/ns_ibts.data.rda"))
+save(ns_ibts.data, file = paste0(surveydata.path, "NS-IBTS/ns_ibts.data.rda"))
 ```
 
 >
@@ -130,17 +132,17 @@ bts.ca <- getDATRAS(record = "CA", "BTS", years = c(1985:2022), quarters = c(1,3
 
 #### Save
 ### Create directory
-if(dir.exists(paste0(surveydata.path2, "BTS")) == FALSE){
-  dir.create(paste0(surveydata.path2, "BTS"))
+if(dir.exists(paste0(surveydata.path, "BTS")) == FALSE){
+  dir.create(paste0(surveydata.path, "BTS"))
 }
-save(bts.hh, file = paste0(surveydata.path2, "BTS/bts.hh.rda"))
-save(bts.hl, file = paste0(surveydata.path2, "BTS/bts.hl.rda"))
-save(bts.ca, file = paste0(surveydata.path2, "BTS/bts.ca.rda"))
+save(bts.hh, file = paste0(surveydata.path, "BTS/bts.hh.rda"))
+save(bts.hl, file = paste0(surveydata.path, "BTS/bts.hl.rda"))
+save(bts.ca, file = paste0(surveydata.path, "BTS/bts.ca.rda"))
 
 #### Processing BTS
 bts.data <- prepsurveydata(bts.hh, bts.hl, bts.ca, ices_rect)
 ### Save
-save(bts.data, file = paste0(surveydata.path2, "BTS/bts.data.rda"))
+save(bts.data, file = paste0(surveydata.path, "BTS/bts.data.rda"))
 ```
 
 >
@@ -160,9 +162,9 @@ Survey years available:
 
 ```{r load.data, cache = F, echo=FALSE, eval=TRUE}
 ### Load BTS
-load(paste0(surveydata.path2, "BTS/bts.hh.rda"))
-load(paste0(surveydata.path2, "BTS/bts.hl.rda"))
-load(paste0(surveydata.path2, "BTS/bts.ca.rda"))
+load(paste0(surveydata.path, "BTS/bts.hh.rda"))
+load(paste0(surveydata.path, "BTS/bts.hl.rda"))
+load(paste0(surveydata.path, "BTS/bts.ca.rda"))
 
 #### Filter BTS to ISIS ship
 bts_isis.hh <- bts.hh[bts.hh$Ship == "64SS",]
@@ -171,17 +173,21 @@ bts_isis.ca <- bts.ca[bts.ca$Ship == "64SS",]
 
 #### Save
 ### Create directory
-if(dir.exists(paste0(surveydata.path2, "BTS-Isis")) == FALSE){
-  dir.create(paste0(surveydata.path2, "BTS-Isis"))
+if(dir.exists(paste0(surveydata.path, "BTS-Isis")) == FALSE){
+  dir.create(paste0(surveydata.path, "BTS-Isis"))
 }
-save(bts_isis.hh, file = paste0(surveydata.path2, "BTS-Isis/bts_isis.hh.rda"))
-save(bts_isis.hl, file = paste0(surveydata.path2, "BTS-Isis/bts_isis.hl.rda"))
-save(bts_isis.ca, file = paste0(surveydata.path2, "BTS-Isis/bts_isis.ca.rda"))
+save(bts_isis.hh, file = paste0(surveydata.path, "BTS-Isis/bts_isis.hh.rda"))
+save(bts_isis.hl, file = paste0(surveydata.path, "BTS-Isis/bts_isis.hl.rda"))
+save(bts_isis.ca, file = paste0(surveydata.path, "BTS-Isis/bts_isis.ca.rda"))
 
 #### Processing BTS-Isis
+load(paste0(surveydata.path, "BTS-Isis/bts_isis.hh.rda"))
+load(paste0(surveydata.path, "BTS-Isis/bts_isis.hl.rda"))
+load(paste0(surveydata.path, "BTS-Isis/bts_isis.ca.rda"))
+
 bts_isis.data <- prepsurveydata(bts_isis.hh, bts_isis.hl, bts_isis.ca, ices_rect)
 ### Save
-save(bts_isis.data, file = paste0(surveydata.path2, "BTS-Isis/bts_isis.data.rda"))
+save(bts_isis.data, file = paste0(surveydata.path, "BTS-Isis/bts_isis.data.rda"))
 ```
 
 >
@@ -200,25 +206,25 @@ Survey years available:
 
 ```{r load.data, cache = F, echo=FALSE, eval=TRUE}
 ### Load BTS
-load(paste0(surveydata.path2, "BTS/bts.hh.rda"))
-load(paste0(surveydata.path2, "BTS/bts.hl.rda"))
-load(paste0(surveydata.path2, "BTS/bts.ca.rda"))
+load(paste0(surveydata.path, "BTS/bts.hh.rda"))
+load(paste0(surveydata.path, "BTS/bts.hl.rda"))
+load(paste0(surveydata.path, "BTS/bts.ca.rda"))
 ### Filter BTS
 uk_bts.hh <- bts.hh[bts.hh$Country == "GB",]
 uk_bts.hl <- bts.hl[bts.hl$Country == "GB",]
 uk_bts.ca <- bts.ca[bts.ca$Country == "GB",]
 ### Create directory
-if(dir.exists(paste0(surveydata.path2, "UK-BTS")) == FALSE){
-  dir.create(paste0(surveydata.path2, "UK-BTS"))
+if(dir.exists(paste0(surveydata.path, "UK-BTS")) == FALSE){
+  dir.create(paste0(surveydata.path, "UK-BTS"))
 }
-save(uk_bts.hh, file = paste0(surveydata.path2, "UK-BTS/uk_bts.hh.rda"))
-save(uk_bts.hl, file = paste0(surveydata.path2, "UK-BTS/uk_bts.hl.rda"))
-save(uk_bts.ca, file = paste0(surveydata.path2, "UK-BTS/uk_bts.ca.rda"))
+save(uk_bts.hh, file = paste0(surveydata.path, "UK-BTS/uk_bts.hh.rda"))
+save(uk_bts.hl, file = paste0(surveydata.path, "UK-BTS/uk_bts.hl.rda"))
+save(uk_bts.ca, file = paste0(surveydata.path, "UK-BTS/uk_bts.ca.rda"))
 
 #### Processing UK-BTS
 uk_bts.data <- prepsurveydata(uk_bts.hh, uk_bts.hl, uk_bts.ca, ices_rect)
 ### Save
-save(uk_bts.data, file = paste0(surveydata.path2, "UK-BTS/uk_bts.data.rda"))
+save(uk_bts.data, file = paste0(surveydata.path, "UK-BTS/uk_bts.data.rda"))
 ```
 
 >
@@ -240,17 +246,21 @@ sns.hl <- getDATRAS(record = "HL", "SNS", years = c(1969:2022), quarters = c(3))
 sns.ca <- getDATRAS(record = "CA", "SNS", years = c(1969:2022), quarters = c(3))
 ### save data
 # Create directory
-if(dir.exists(paste0(surveydata.path2, "SNS")) == FALSE){
-  dir.create(paste0(surveydata.path2, "SNS"))
+if(dir.exists(paste0(surveydata.path, "SNS")) == FALSE){
+  dir.create(paste0(surveydata.path, "SNS"))
 }
-save(sns.hh, file = paste0(surveydata.path2, "SNS/sns.hh.rda"))
-save(sns.hl, file = paste0(surveydata.path2, "SNS/sns.hl.rda"))
-save(sns.ca, file = paste0(surveydata.path2, "SNS/sns.ca.rda"))
+save(sns.hh, file = paste0(surveydata.path, "SNS/sns.hh.rda"))
+save(sns.hl, file = paste0(surveydata.path, "SNS/sns.hl.rda"))
+save(sns.ca, file = paste0(surveydata.path, "SNS/sns.ca.rda"))
 
 ### Processing SNS
+load(paste0(surveydata.path, "SNS/sns.hh.rda"))
+load(paste0(surveydata.path, "SNS/sns.hl.rda"))
+load(paste0(surveydata.path, "SNS/sns.ca.rda"))
+
 sns.data <- prepsurveydata(sns.hh, sns.hl, sns.ca, ices_rect)
 ### Save
-save(sns.data, file = paste0(surveydata.path2, "SNS/sns.data.rda"))
+save(sns.data, file = paste0(surveydata.path, "SNS/sns.data.rda"))
 ```
 
 >
@@ -274,17 +284,17 @@ dyfs.ca <- getDATRAS(record = "CA", "DYFS", years = c(1969:2022), quarters = c(3
 
 #### Save
 ### Create directory
-if(dir.exists(paste0(surveydata.path2, "DYFS")) == FALSE){
-  dir.create(paste0(surveydata.path2, "DYFS"))
+if(dir.exists(paste0(surveydata.path, "DYFS")) == FALSE){
+  dir.create(paste0(surveydata.path, "DYFS"))
 }
-save(dyfs.hh, file = paste0(surveydata.path2, "DYFS/dyfs.hh.rda"))
-save(dyfs.hl, file = paste0(surveydata.path2, "DYFS/dyfs.hl.rda"))
-save(dyfs.ca, file = paste0(surveydata.path2, "DYFS/dyfs.ca.rda"))
+save(dyfs.hh, file = paste0(surveydata.path, "DYFS/dyfs.hh.rda"))
+save(dyfs.hl, file = paste0(surveydata.path, "DYFS/dyfs.hl.rda"))
+save(dyfs.ca, file = paste0(surveydata.path, "DYFS/dyfs.ca.rda"))
 
 #### Processing DYFS
 dyfs.data <- prepsurveydata(dyfs.hh, dyfs.hl, dyfs.ca, ices_rect)
 ### Save
-save(dyfs.data, file = paste0(surveydata.path2, "DYFS/dyfs.data.rda"))
+save(dyfs.data, file = paste0(surveydata.path, "DYFS/dyfs.data.rda"))
 ```
 
 >
@@ -320,17 +330,17 @@ fr_cgfs.ca <- getDATRAS(record = "CA", "FR-CGFS", years = c(1969:2022), quarters
 
 #### Save
 ### Create directory
-if(dir.exists(paste0(surveydata.path2, "FR-CGFS")) == FALSE){
-  dir.create(paste0(surveydata.path2, "FR-CGFS"))
+if(dir.exists(paste0(surveydata.path, "FR-CGFS")) == FALSE){
+  dir.create(paste0(surveydata.path, "FR-CGFS"))
 }
-save(fr_cgfs.hh, file = paste0(surveydata.path2, "FR-CGFS/fr_cgfs.hh.rda"))
-save(fr_cgfs.hl, file = paste0(surveydata.path2, "FR-CGFS/fr_cgfs.hl.rda"))
-save(fr_cgfs.ca, file = paste0(surveydata.path2, "FR-CGFS/fr_cgfs.ca.rda"))
+save(fr_cgfs.hh, file = paste0(surveydata.path, "FR-CGFS/fr_cgfs.hh.rda"))
+save(fr_cgfs.hl, file = paste0(surveydata.path, "FR-CGFS/fr_cgfs.hl.rda"))
+save(fr_cgfs.ca, file = paste0(surveydata.path, "FR-CGFS/fr_cgfs.ca.rda"))
 
 #### Processing FR-CGFS
 fr_cgfs.data <- prepsurveydata(fr_cgfs.hh, fr_cgfs.hl, fr_cgfs.ca, ices_rect)
 ### Save
-save(fr_cgfs.data, file = paste0(surveydata.path2, "FR-CGFS/fr_cgfs.data.rda"))
+save(fr_cgfs.data, file = paste0(surveydata.path, "FR-CGFS/fr_cgfs.data.rda"))
 ```
 
 >
@@ -353,18 +363,18 @@ swc_ibts.ca <- getDATRAS(record = "CA", "SWC-IBTS", years = c(1985:2010), quarte
 
 #### Save
 ### Create directory
-if(dir.exists(paste0(surveydata.path2, "SWC-IBTS")) == FALSE){
-  dir.create(paste0(surveydata.path2, "SWC-IBTS"))
+if(dir.exists(paste0(surveydata.path, "SWC-IBTS")) == FALSE){
+  dir.create(paste0(surveydata.path, "SWC-IBTS"))
 }
 
-save(swc_ibts.hh, file = paste0(surveydata.path2, "SWC-IBTS/swc_ibts.hh.rda"))
-save(swc_ibts.hl, file = paste0(surveydata.path2, "SWC-IBTS/swc_ibts.hl.rda"))
-save(swc_ibts.ca, file = paste0(surveydata.path2, "SWC-IBTS/swc_ibts.ca.rda"))
+save(swc_ibts.hh, file = paste0(surveydata.path, "SWC-IBTS/swc_ibts.hh.rda"))
+save(swc_ibts.hl, file = paste0(surveydata.path, "SWC-IBTS/swc_ibts.hl.rda"))
+save(swc_ibts.ca, file = paste0(surveydata.path, "SWC-IBTS/swc_ibts.ca.rda"))
 
 #### Processing SWC-IBTS
 swc_ibts.data <- prepsurveydata(swc_ibts.hh, swc_ibts.hl, swc_ibts.ca, ices_rect)
 ### Save
-save(swc_ibts.data, file = paste0(surveydata.path2, "SWC-IBTS/swc_ibts.data.rda"))
+save(swc_ibts.data, file = paste0(surveydata.path, "SWC-IBTS/swc_ibts.data.rda"))
 ```
 
 >
@@ -387,17 +397,17 @@ scowcgfs.ca <- getDATRAS(record = "CA", "SCOWCGFS", years = c(2011:2022), quarte
 
 #### Save
 ### Create directory
-if(dir.exists(paste0(surveydata.path2, "SCOWCGFS")) == FALSE){
-  dir.create(paste0(surveydata.path2, "SCOWCGFS"))
+if(dir.exists(paste0(surveydata.path, "SCOWCGFS")) == FALSE){
+  dir.create(paste0(surveydata.path, "SCOWCGFS"))
 }
-save(scowcgfs.hh, file = paste0(surveydata.path2, "SCOWCGFS/scowcgfs.hh.rda"))
-save(scowcgfs.hl, file = paste0(surveydata.path2, "SCOWCGFS/scowcgfs.hl.rda"))
-save(scowcgfs.ca, file = paste0(surveydata.path2, "SCOWCGFS/scowcgfs.ca.rda"))
+save(scowcgfs.hh, file = paste0(surveydata.path, "SCOWCGFS/scowcgfs.hh.rda"))
+save(scowcgfs.hl, file = paste0(surveydata.path, "SCOWCGFS/scowcgfs.hl.rda"))
+save(scowcgfs.ca, file = paste0(surveydata.path, "SCOWCGFS/scowcgfs.ca.rda"))
 
 #### Processing SCOWCGFS
 scowcgfs.data <- prepsurveydata(scowcgfs.hh, scowcgfs.hl, scowcgfs.ca, ices_rect)
 ### Save
-save(scowcgfs.data, file = paste0(surveydata.path2, "SCOWCGFS/scowcgfs.data.rda"))
+save(scowcgfs.data, file = paste0(surveydata.path, "SCOWCGFS/scowcgfs.data.rda"))
 ```
 
 >
@@ -420,16 +430,16 @@ ie_igfs.ca <- getDATRAS(record = "CA", "IE-IGFS", years = c(2003:2022), quarters
 
 #### Save
 ### Create directory
-if(dir.exists(paste0(surveydata.path2, "IE-IGFS")) == FALSE){
-  dir.create(paste0(surveydata.path2, "IE-IGFS"))
+if(dir.exists(paste0(surveydata.path, "IE-IGFS")) == FALSE){
+  dir.create(paste0(surveydata.path, "IE-IGFS"))
 }
 
-save(ie_igfs.hh, file = paste0(surveydata.path2, "IE-IGFS/ie_igfs.hh.rda"))
-save(ie_igfs.hl, file = paste0(surveydata.path2, "IE-IGFS/ie_igfs.hl.rda"))
-save(ie_igfs.ca, file = paste0(surveydata.path2, "IE-IGFS/ie_igfs.ca.rda"))
+save(ie_igfs.hh, file = paste0(surveydata.path, "IE-IGFS/ie_igfs.hh.rda"))
+save(ie_igfs.hl, file = paste0(surveydata.path, "IE-IGFS/ie_igfs.hl.rda"))
+save(ie_igfs.ca, file = paste0(surveydata.path, "IE-IGFS/ie_igfs.ca.rda"))
 
 #### Processing IE-IGFS
 ie_igfs.data <- prepsurveydata(ie_igfs.hh, ie_igfs.hl, ie_igfs.ca, ices_rect)
 ### Save
-save(ie_igfs.data, file = paste0(surveydata.path2, "IE-IGFS/ie_igfs.data.rda"))
+save(ie_igfs.data, file = paste0(surveydata.path, "IE-IGFS/ie_igfs.data.rda"))
 ```
