@@ -6,7 +6,7 @@
 ################################################################################
 
 ################################ SPI DATA PREP #################################
-spi_prep <- function(hlhh, yrs, qrs, species_aphia, stk_regions){
+spi_prep <- function(hlhh, yrs, qrs, species_aphia, stk_divs){
   #### TotalNo for each species in each year and quarter
   s1 <- hlhh %>%
     select(haul.id, Valid_Aphia, Year, Quarter, StatRec, Area_27, TotalNo, HaulVal, HaulDur) %>%
@@ -96,24 +96,20 @@ spi_calc <- function(observed, area){
   #if(length(unique(area)) == 1|NA){
   # area <- rep(1, length(observed))
   #}
-  
   spi <- as.data.frame(cbind(observed, area))
   # remove rows of data with NAs
   spi <- spi[complete.cases(spi), ]
-  
   perc <- data.frame()
   N <- sum(spi$observed)
   
   for(a in spi$area){
-    
-    
     area_perc <- a/sum(spi$area)*100
     fe <- N*(area_perc/100) # expected occurence if random distributed
     o_minus_e <- 
       output <- c(area_perc, fe)
     perc <- rbind(perc, output) # area of each zone in perc
-    
   }
+  
   perc <- cbind(spi$observed, spi$area, perc)
   colnames(perc) <- c("Observations", "Area", "Area_Percentage", "Expected")
   fe_min <- min(perc$Expected)
@@ -124,7 +120,7 @@ spi_calc <- function(observed, area){
   }
   #print(perc)
   spi <- (sum(perc$fe_fo))/(2*(N-fe_min))
-  #message("SPI value of 0 indicates homogenous use of zones. A value of 1 indicates strong biased use of one zone: ")
+  
   return(spi)
 }
 
@@ -132,10 +128,10 @@ spi_calc <- function(observed, area){
 ###                              PosArea_Rect                                ###
 ################################################################################
 
-pa_rect <- function(hh, hlhh, yrs, qrs, species_aphia, stk_regions){
+pa_rect <- function(hh, hlhh, yrs, qrs, species_aphia, stk_divs){
   #### How many rectangles were sampled in each year?
   n.rects <- hh %>%
-    filter(Area_27 %in% stk_regions, 
+    filter(Area_27 %in% stk_divs, 
            Year %in% yrs,
            Quarter %in% qrs,
            HaulVal != "I") %>% # remove invalid hauls
@@ -144,7 +140,7 @@ pa_rect <- function(hh, hlhh, yrs, qrs, species_aphia, stk_regions){
   
   #### How many rectangles sampled where species were present?
   p.rects <- hlhh %>%
-    filter(Area_27 %in% stk_regions,
+    filter(Area_27 %in% stk_divs,
            Year %in% yrs,
            Quarter %in% qrs,
            HaulVal != "I") %>% # remove invalid hauls
@@ -182,10 +178,10 @@ pa_rect <- function(hh, hlhh, yrs, qrs, species_aphia, stk_regions){
 ###                              PosArea_Haul                                ###
 ################################################################################
 
-pa_haul <- function(hh, hlhh, yrs, qrs, species_aphia, stk_regions){
+pa_haul <- function(hh, hlhh, yrs, qrs, species_aphia, stk_divs){
   ### How many hauls in each year in each quarter?
   n.hauls <- hh %>% 
-    filter(Area_27 %in% stk_regions,
+    filter(Area_27 %in% stk_divs,
            Year %in% yrs,
            Quarter %in% qrs,
            HaulVal != "I") %>% # remove invalid hauls
@@ -194,7 +190,7 @@ pa_haul <- function(hh, hlhh, yrs, qrs, species_aphia, stk_regions){
   
   ### How many hauls in each quarter where species were present?
   p.hauls <- hlhh %>% 
-    filter(Area_27 %in% stk_regions,
+    filter(Area_27 %in% stk_divs,
            Year %in% yrs,
            Quarter %in% qrs,
            HaulVal != "I") %>% # remove invalid hauls
@@ -231,16 +227,44 @@ pa_haul <- function(hh, hlhh, yrs, qrs, species_aphia, stk_regions){
 ################################################################################
 
 ################################ Lorenz Data ###################################
-lorenz_data <- function(hlhh, yrs, qrs, species_aphia, stk_regions){
-  lorenz <- hlhh %>%
-    filter(Area_27 %in% stk_regions,
+lorenz_data <- function(hlhh, yrs, qrs, species_aphia, stk_divs){
+  # get each individual haul. We dont care about Valid_Aphia or TotalNo here 
+  allspcs_lor <- hlhh %>%
+    filter(Area_27 %in% stk_divs,
+           Year %in% yrs,
+           Quarter %in% qrs,
+           HaulVal != "I") %>% # remove invalid hauls
+    select(haul.id, Year, StatRec, HaulDur) %>%
+    distinct() %>%
+    na.omit() %>%
+    mutate(TotalNo = 0, # add 0 TotalNo 
+           Valid_Aphia = species_aphia) %>% # add species aphia
+    select(haul.id, Valid_Aphia, Year, StatRec, TotalNo, HaulDur) # rearrange cols
+  
+  if(all(unique(allspcs_lor$Year), unique(hlhh$Year)) == FALSE){
+    warning("Not all survey years were retained in `allspcs_lor`.")
+  }
+  if(any(duplicated(allspcs_lor$haul.id))==TRUE){
+    warning("Some rows of haul.id are duplicated in `allspcs_lor`.")
+  }
+  # get the data filtered to where species were found 
+  spcs_lor <- hlhh %>%
+    filter(Area_27 %in% stk_divs,
            Year %in% yrs,
            Quarter %in% qrs,
            HaulVal != "I") %>% # remove invalid hauls
     select(haul.id, Valid_Aphia, Year, StatRec, TotalNo, HaulDur) %>%
     filter(Valid_Aphia == species_aphia) %>%
     distinct() %>%
-    na.omit() %>% 
+    na.omit() 
+  
+  if(janitor::compare_df_cols_same(allspcs_lor, spcs_lor)==FALSE){
+    warning("Columns in `allspcs_lor` and `spcs_lor` do not match.")
+  }
+  # bind hauls where species were not found to data where species present data
+  # hauls where species were not found will now have the haul.id with TotalNo = 0
+  lorenz <- bind_rows(spcs_lor, allspcs_lor) %>%
+    arrange(Year) %>%
     mutate(TotalNo_Dur = TotalNo/HaulDur) %>% # standardise by haul duration
     arrange(Year, TotalNo_Dur) %>% # order desc
     group_by(Year) %>%
@@ -249,8 +273,13 @@ lorenz_data <- function(hlhh, yrs, qrs, species_aphia, stk_regions){
            cumsum_prop = cumsum(TotalNo_Dur)/max(cumsum(TotalNo_Dur)),
            rect_num_prop = row_number()/max(row_number()))
   lorenz$Year <- as.numeric(as.character(lorenz$Year))
+  
+  if(suppressWarnings(all(unique(lorenz$Year), unique(hlhh$Year)) == FALSE)){
+    warning("Not all survey years were retained in `lorenz`.")
+  }
   return(lorenz)
 }
+
 ################################ Lorenz Plot ###################################
 lorenz_plot <- function(lorenz_data){
   lplot <- ggplot(data = lorenz_data, aes(x = rect_num_prop, y = cumsum_prop)) + 
@@ -275,10 +304,12 @@ y = "Culmuative Sum of Species Counts (%/100)") +
 ################################ Gini Index ###################################
 Gini <- function(lorenz_data){
     G <- lorenz_data %>%
-    group_by(Year) %>%
-    summarise(G = ineq(TotalNo_Dur, type = "Gini"))
-  G$Year <- as.numeric(as.character(G$Year))
-  return(G)
+      group_by(Year) %>%
+      summarise('Gini Index' = ineq(TotalNo_Dur, type = "Gini"))
+    G$'Gini Index' <- 1- G$'Gini Index' # take inverse, higher = more distributed
+    G$'Gini Index'[is.nan(G$'Gini Index')] <- 0 # change NaNs to 0
+    G$Year <- as.numeric(as.character(G$Year))
+    return(G)
 }
 
 ################################### D95 #######################################
@@ -300,6 +331,7 @@ d95 <- function(lorenz_data){
     D95_d <- rbind(D95_d, output)
   }
   colnames(D95_d) <- c("Year", "Index_loc", "D95_cumsum", "D95")
+  D95_d$D95[is.nan(D95_d$D95)] <- 0 # change NaNs to 0
   D95_d$Year <- as.numeric(as.character(D95_d$Year))
   return(D95_d)
 }
