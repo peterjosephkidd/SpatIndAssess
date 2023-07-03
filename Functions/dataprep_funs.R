@@ -18,7 +18,7 @@ prepsurveydata <- function(hh, hl, ca, ices_rect){
   # ICES shapefiles and the ices data frames  created above
   # record type.
   tictoc::tic()
-  message("Getting location information from ICES shp and merging")
+  message("Getting location information from ICES shp")
   
   area_div <- dplyr::distinct(ices_rect[c("ICESNAME", "Area_27", "Shape_Area")])
   
@@ -31,6 +31,14 @@ prepsurveydata <- function(hh, hl, ca, ices_rect){
   ## using Shoot
   hh$lon_lat <- paste0(hh$ShootLong, "_", hh$ShootLat)
   
+  ## remove rows of data where TotalNo < 0
+  # identified this issue after funky Lorenz plots and TSS for D95 and Gini in turbot
+  # where many years of data had -9 TotalNo
+  # was there a reason that it was always -9??? (SNS survey)
+  message("Removing rows in hl where TotalNo < 0")
+  hl <- subset(hl, TotalNo >= 0)
+
+  message("Merging hl and hh data into hlhh")
   # Create a Haul ID
   hh$haul.id <- as.character(paste(hh$Year, 
                                         hh$Quarter, 
@@ -75,15 +83,6 @@ prepsurveydata <- function(hh, hl, ca, ices_rect){
                      dplyr::distinct(m),
                      c("haul.id", "Year", "Quarter", "HaulNo", "StNo", "Gear", "GearEx", "DoorType","Ship", 
                        "SweepLngt", "Country"))
-  
-  #message("Splitting HL data to remove replicate TotalNo")
-  # hl1_tot <- hl[c(1:18, 29, 30, 33, 34)]
-  # hl1_tot <- unique(hl1_tot)
-  # hlhh1_tot <- merge(hl1_tot,
-                          #dplyr::distinct(m),
-                          #c("haul.id", "Year", "Quarter", "HaulNo", "StNo", 
-                           # "HaulDur", "Gear", "GearEx", "DoorType","Ship", 
-                           # "SweepLngt", "Country"))
   
   message("Some data might be removed after merging hh and hl. This is typically due to haul.id's in HL not being in HH. Check which rows were removed, if any, by using the following code:")
   
