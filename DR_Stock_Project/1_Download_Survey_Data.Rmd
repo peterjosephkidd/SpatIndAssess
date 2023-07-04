@@ -33,7 +33,6 @@ options(download.file.method = "curl")
 # Load Packages & Functions
 ```{r}
 pckgs <- c("icesDatras", "icesVocab", "rgdal", "ggplot2", "dplyr")
-
 for(pkg in pckgs){
   library(pkg, character.only = T, quietly = T)
 }
@@ -106,7 +105,11 @@ load(paste0(surveydata.path, "NS-IBTS/ns_ibts.hl.rda"))
 load(paste0(surveydata.path, "NS-IBTS/ns_ibts.ca.rda"))
 
 ns_ibts.data <- prepsurveydata(ns_ibts.hh, ns_ibts.hl, ns_ibts.ca, ices_rect)
+rm(ns_ibts.hh, ns_ibts.hl, ns_ibts.ca)
+
+### Save
 save(ns_ibts.data, file = paste0(surveydata.path, "NS-IBTS/ns_ibts.data.rda"))
+rm(ns_ibts.data)
 ```
 
 >
@@ -140,9 +143,16 @@ save(bts.hl, file = paste0(surveydata.path, "BTS/bts.hl.rda"))
 save(bts.ca, file = paste0(surveydata.path, "BTS/bts.ca.rda"))
 
 #### Processing BTS
+load(paste0(surveydata.path, "BTS/bts.hh.rda"))
+load(paste0(surveydata.path, "BTS/bts.hl.rda"))
+load(paste0(surveydata.path, "BTS/bts.ca.rda"))
+
 bts.data <- prepsurveydata(bts.hh, bts.hl, bts.ca, ices_rect)
+rm(bts.hh, bts.hl, bts.ca)
+
 ### Save
 save(bts.data, file = paste0(surveydata.path, "BTS/bts.data.rda"))
+rm(bts.data)
 ```
 
 >
@@ -186,8 +196,11 @@ load(paste0(surveydata.path, "BTS-Isis/bts_isis.hl.rda"))
 load(paste0(surveydata.path, "BTS-Isis/bts_isis.ca.rda"))
 
 bts_isis.data <- prepsurveydata(bts_isis.hh, bts_isis.hl, bts_isis.ca, ices_rect)
+rm(bts_isis.hh, bts_isis.hl, bts_isis.ca)
+
 ### Save
 save(bts_isis.data, file = paste0(surveydata.path, "BTS-Isis/bts_isis.data.rda"))
+rm(bts_isis.data)
 ```
 
 >
@@ -222,9 +235,16 @@ save(uk_bts.hl, file = paste0(surveydata.path, "UK-BTS/uk_bts.hl.rda"))
 save(uk_bts.ca, file = paste0(surveydata.path, "UK-BTS/uk_bts.ca.rda"))
 
 #### Processing UK-BTS
+load(paste0(surveydata.path, "UK-BTS/uk_bts.hh.rda"))
+load(paste0(surveydata.path, "UK-BTS/uk_bts.hl.rda"))
+load(paste0(surveydata.path, "UK-BTS/uk_bts.ca.rda"))
+
 uk_bts.data <- prepsurveydata(uk_bts.hh, uk_bts.hl, uk_bts.ca, ices_rect)
+rm(uk_bts.hh, uk_bts.hl, uk_bts.ca)
+
 ### Save
 save(uk_bts.data, file = paste0(surveydata.path, "UK-BTS/uk_bts.data.rda"))
+rm(uk_bts.data)
 ```
 
 >
@@ -259,8 +279,11 @@ load(paste0(surveydata.path, "SNS/sns.hl.rda"))
 load(paste0(surveydata.path, "SNS/sns.ca.rda"))
 
 sns.data <- prepsurveydata(sns.hh, sns.hl, sns.ca, ices_rect)
+rm(sns.hh, sns.hl, sns.ca)
+
 ### Save
 save(sns.data, file = paste0(surveydata.path, "SNS/sns.data.rda"))
+rm(sns.data)
 ```
 
 >
@@ -292,9 +315,15 @@ save(dyfs.hl, file = paste0(surveydata.path, "DYFS/dyfs.hl.rda"))
 save(dyfs.ca, file = paste0(surveydata.path, "DYFS/dyfs.ca.rda"))
 
 #### Processing DYFS
-dyfs.data <- prepsurveydata(dyfs.hh, dyfs.hl, dyfs.ca, ices_rect)
+load(paste0(surveydata.path, "DYFS/dyfs.hh.rda"))
+load(paste0(surveydata.path, "DYFS/dyfs.hl.rda"))
+load(paste0(surveydata.path, "DYFS/dyfs.ca.rda"))
+
+dyfs.data <- prepsurveydata(dyfs.hh, dyfs.hl, dyfs.ca, ices_rect) # Warning: merge not correct. Check
+rm(dyfs.hh, dyfs.hl, dyfs.ca)
 ### Save
 save(dyfs.data, file = paste0(surveydata.path, "DYFS/dyfs.data.rda"))
+rm(dyfs.data)
 ```
 
 >
@@ -338,9 +367,16 @@ save(fr_cgfs.hl, file = paste0(surveydata.path, "FR-CGFS/fr_cgfs.hl.rda"))
 save(fr_cgfs.ca, file = paste0(surveydata.path, "FR-CGFS/fr_cgfs.ca.rda"))
 
 #### Processing FR-CGFS
+load(paste0(surveydata.path, "FR-CGFS/fr_cgfs.hh.rda"))
+load(paste0(surveydata.path, "FR-CGFS/fr_cgfs.hl.rda"))
+load(paste0(surveydata.path, "FR-CGFS/fr_cgfs.ca.rda"))
+
 fr_cgfs.data <- prepsurveydata(fr_cgfs.hh, fr_cgfs.hl, fr_cgfs.ca, ices_rect)
+rm(fr_cgfs.hh, fr_cgfs.hl, fr_cgfs.ca)
+
 ### Save
 save(fr_cgfs.data, file = paste0(surveydata.path, "FR-CGFS/fr_cgfs.data.rda"))
+rm(fr_cgfs.data)
 ```
 
 >
@@ -372,9 +408,16 @@ save(swc_ibts.hl, file = paste0(surveydata.path, "SWC-IBTS/swc_ibts.hl.rda"))
 save(swc_ibts.ca, file = paste0(surveydata.path, "SWC-IBTS/swc_ibts.ca.rda"))
 
 #### Processing SWC-IBTS
+load(paste0(surveydata.path, "SWC-IBTS/swc_ibts.hh.rda"))
+load(paste0(surveydata.path, "SWC-IBTS/swc_ibts.hl.rda"))
+load(paste0(surveydata.path, "SWC-IBTS/swc_ibts.ca.rda"))
+
 swc_ibts.data <- prepsurveydata(swc_ibts.hh, swc_ibts.hl, swc_ibts.ca, ices_rect)
+rm(swc_ibts.hh, swc_ibts.hl, swc_ibts.ca)
+
 ### Save
 save(swc_ibts.data, file = paste0(surveydata.path, "SWC-IBTS/swc_ibts.data.rda"))
+rm(swc_ibts.data)
 ```
 
 >
@@ -405,9 +448,16 @@ save(scowcgfs.hl, file = paste0(surveydata.path, "SCOWCGFS/scowcgfs.hl.rda"))
 save(scowcgfs.ca, file = paste0(surveydata.path, "SCOWCGFS/scowcgfs.ca.rda"))
 
 #### Processing SCOWCGFS
+load(paste0(surveydata.path, "SCOWCGFS/scowcgfs.hh.rda"))
+load(paste0(surveydata.path, "SCOWCGFS/scowcgfs.hl.rda"))
+load(paste0(surveydata.path, "SCOWCGFS/scowcgfs.ca.rda"))
+
 scowcgfs.data <- prepsurveydata(scowcgfs.hh, scowcgfs.hl, scowcgfs.ca, ices_rect)
+rm(scowcgfs.hh, scowcgfs.hl, scowcgfs.ca)
+
 ### Save
 save(scowcgfs.data, file = paste0(surveydata.path, "SCOWCGFS/scowcgfs.data.rda"))
+rm(scowcgfs.data)
 ```
 
 >
@@ -439,7 +489,14 @@ save(ie_igfs.hl, file = paste0(surveydata.path, "IE-IGFS/ie_igfs.hl.rda"))
 save(ie_igfs.ca, file = paste0(surveydata.path, "IE-IGFS/ie_igfs.ca.rda"))
 
 #### Processing IE-IGFS
+load(paste0(surveydata.path, "IE-IGFS/ie_igfs.hh.rda"))
+load(paste0(surveydata.path, "IE-IGFS/ie_igfs.hl.rda"))
+load(paste0(surveydata.path, "IE-IGFS/ie_igfs.ca.rda"))
+
 ie_igfs.data <- prepsurveydata(ie_igfs.hh, ie_igfs.hl, ie_igfs.ca, ices_rect)
+rm(ie_igfs.hh, ie_igfs.hl, ie_igfs.ca)
+
 ### Save
 save(ie_igfs.data, file = paste0(surveydata.path, "IE-IGFS/ie_igfs.data.rda"))
+rm(ie_igfs.data)
 ```
