@@ -54,18 +54,21 @@ source(paste0(getwd(), "/Functions/ROC_funs.R"))      # for ROC and TSS
 ## ICES Divisions and Rectangles 
 ```{r ices.rect, cache = T}
 ### ICES Rectangles
-ices_rect2 <- readOGR(dsn = paste0(getwd(), "/Data/ICES Rect"), layer = "StatRec_map_Areas_Full_20170124")
-ices_rect <- makeReadableFortify(ices_rect2)
-
-rm(ices_rect2)
+#ices_rect2 <- readOGR(dsn = paste0(getwd(), "/Data/ICES Rect"), layer = "StatRec_map_Areas_Full_20170124")
+#ices_rect <- makeReadableFortify(ices_rect2)
+#rm(ices_rect2)
 
 ### ICES Divisions
-ices_divs2 <- readOGR(dsn = paste0(getwd(), "/Data/ICES Divs"), layer = "ICES_Areas_20160601_cut_dense_3857")
+#ices_divs2 <- readOGR(dsn = paste0(getwd(), "/Data/ICES Divs"), layer = "ICES_Areas_20160601_cut_dense_3857")
 # ices_divs <- readOGR(dsn = "ICES North Sea Divisions", layer = "ICES_Divisons_CodHadWhgPok") # old shapefile
-ices_divs <- makeReadableFortify(ices_divs2)
-
-rm(ices_divs2)
+#ices_divs <- makeReadableFortify(ices_divs2)
+#rm(ices_divs2)
 ```
+```{r}
+load(paste0(getwd(), "/Data/ICES Rect/ices_rect.rds"))
+load(paste0(getwd(), "/Data/ICES Divs/ices_divs.rds"))
+```
+
 
 ### Plot Divisions (FIX)
 !! The x y coordinates of the shapefiles are currently on different scales and cannot be overlapped using the method with the old ICES Divisions shapefile
@@ -102,7 +105,7 @@ surveydata.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Sp
 ## Stock Objects
 Load in the stock assessment objects:
 ```{r}
-stockobj.path <- paste0(getwd(), "/Data/DR_Stocks/Stock_Objects/")
+stockobj.path <- paste0(getwd(), "/Data/DR_Stocks/Stock Objects/2022/")
 for(stockfile in list.files(stockobj.path)){
   load(paste0(stockobj.path, stockfile))
 }
@@ -111,8 +114,8 @@ for(stockfile in list.files(stockobj.path)){
 ## Stock Metadata and Reference Points
 I have manually taken information from the advice sheets and put it into a Excel document
 ```{r}
-allstk_metadata <- read_excel(paste0(getwd(), "/Data/DR_Stocks/Advice_Sheets/stock_metadata_refpts.xlsx"), sheet = "stk_metadata")
-allstk_refpts <- read_excel(paste0(getwd(), "/Data/DR_Stocks/Advice_Sheets/stock_metadata_refpts.xlsx"), sheet = "stk_refpts")
+allstk_metadata <- read_excel(paste0(getwd(), "/Data/DR_Stocks/Advice Sheets/2022/stock_metadata_refpts.xlsx"), sheet = "stk_metadata")
+allstk_refpts <- read_excel(paste0(getwd(), "/Data/DR_Stocks/Advice Sheets/2022/stock_metadata_refpts.xlsx"), sheet = "stk_refpts")
 ```
 
 # Run
@@ -123,8 +126,8 @@ Change `stk` and `stk.chr` to the stock you want to run the ROC analysis for.
 ### Stocks available
 unique(allstk_metadata$stk_id) # ignore so.27.7d for now, need to find YFS survey data
 ### Select the stock to analyse
-stk <- tur.27.4
-stk.chr <- "tur.27.4"
+stk <- had.27.46a20
+stk.chr <- "had.27.46a20"
 ```
 
 ### Species Name
@@ -318,6 +321,8 @@ Here we calculate time-series of spatial indicators and plot this time series. T
 si.output.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/10Stock_Outputs/"
 
 ### Calculate spatial indicators for every year in each individual time series of survey data
+indx <- "UK-BTS"
+survey <- "UK-BTS"
 for(indx in 1:length(stk_data_filtered)){
   for(survey in 1:length(stk_data_filtered[[indx]])){
     # get survey name within this survey index
@@ -376,27 +381,30 @@ for(indx in 1:length(stk_data_filtered)){
             species_aphia = species_aphia, 
             stk_divs = stk_divs)
     #### Calculate
-    spi <- spi_data %>% group_by(Year) %>% # Year only, not quarter
+    spi <- spi_data %>% 
+      group_by(Year) %>% # Year only, not quarter
       filter(Area_27 %in% stk_divs) %>%
-      summarise(SPI = spi_calc(TotalNo_TotalDur, area = 1)) ## all areas equal weight
+      summarise(SPI = spi_calc(TotalNo_TotalDur, area = 1)) %>% # area=1 = all rects equal weight
+      mutate(Quarter = paste(as.character(sort(unique(spi_data$Quarter))), collapse = ", ")) %>% # add quarters
+      relocate(Year, Quarter)
     #### Take inverse of SPI, so high numbers = good
     spi$SPI <- 1-spi$SPI 
-    spi$SPI[is.nan(spi$SPI)] <- 0 # change NaNs to 0 
+    #### Then change NaNs to 0
+    spi$SPI[is.nan(spi$SPI)] <- 0 
 ################################################################################
     ### Merge all spatial indicator values into a single data frame
     message("Merging and saving spatial indicator data...")
     ## select the columns that we need
-    Gini.index <- Gini.index[c("Year", "Gini Index")]
-    D95 <- D95[c("Year", "D95")]
-    np.hauls <- np.hauls[c("Year", "PosArea")]
-    np.rects <- np.rects[c("Year", "PosArea")]
-    spi <- spi[c("Year", "SPI")]
+    Gini.index <- Gini.index[c("Year", "Quarter", "Gini Index")]
+    D95 <- D95[c("Year", "Quarter", "D95")]
+    np.hauls <- np.hauls[c("Year", "Quarter", "PosAreaH")]
+    np.rects <- np.rects[c("Year", "Quarter", "PosAreaR")]
+    spi <- spi[c("Year", "Quarter", "SPI")]
     ## merge
-    si <- Reduce(function(x, y) merge(x, y, by = "Year"), list(Gini.index, D95, np.hauls, np.rects, spi))
+    si <- Reduce(function(x, y) merge(x, y, by = c("Year", "Quarter")), list(Gini.index, D95, np.hauls, np.rects, spi))
     ## rename some columns
-    #colnames(si)[2] <- "Gini Index"
-    colnames(si)[4] <- "Positve Area (Rectangle)"
-    colnames(si)[5] <- "Positive Area (Haul)"
+    colnames(si)[colnames(si) == "PosAreaH"] <- "Positive Area (Haul)"
+    colnames(si)[colnames(si) == "PosAreaR"] <- "Positve Area (Rectangle)"
     
   ### Save
   ## Create directories
@@ -426,17 +434,17 @@ for(indx in 1:length(stk_data_filtered)){
     si_long <- si %>% tidyr::pivot_longer(cols = c("Gini Index", "D95", "Positve Area (Rectangle)", "Positive Area (Haul)", "SPI" ), 
                             names_to = "Indicator",
                             values_to = "Value")
+    qrs_text <- paste(as.character(sort(qrs)), collapse = ", ")
     ## create the plot
     si_plot <- ggplot() +
       geom_line(data = si_long, aes(x = Year, y = Value, group = Indicator, colour = Indicator)) +
       labs(title = paste0("Spatial Indicators for ", stk.chr,
-" | Survey Index: ", names(stk_data_filtered[indx]), " | Survey: ", names(stk_data_filtered[[indx]][survey]), " (", min(yrs), "-", max(yrs), ", Q", qrs, ")")) +
+" | Survey Index: ", names(stk_data_filtered[indx]), " | Survey: ", names(stk_data_filtered[[indx]][survey]), " (", min(yrs), "-", max(yrs), ", Q", qrs_text, ")")) +
       theme(plot.title = element_text(size = 8)) +
       coord_cartesian(ylim = c(0,1))
     ## save plot
     cowplot::save_plot(plot = si_plot, filename = paste0(si.save.path, "/SpatIndPlot/SpatIndPlot - ", stk.chr, " - ", names(stk_data_filtered[indx]), " - ", names(stk_data_filtered[[indx]][survey]), ".png"))
     print(noquote("-------------------------------"))
-      
   }
 }
 ```
@@ -445,6 +453,9 @@ for(indx in 1:length(stk_data_filtered)){
 Now we use the spatial indicator times series data, along with the stock assessment data to calculate and plot the ROC curves and TSS. Again, this is done for each survey within each survey index.
 ```{r}
 si.stk.path <- paste0("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/10Stock_Outputs/", stk.chr, "/")
+
+#IndexFolder <- "FR-GFS"
+#SurveyFolder <- "FR-CGFS"
 
 for(IndexFolder in list.files(si.stk.path)){
   message(paste0("Survey Index: ", IndexFolder))
@@ -455,10 +466,11 @@ for(IndexFolder in list.files(si.stk.path)){
       si_file <- list.files(paste0(si.stk.path, IndexFolder, "/", SurveyFolder, "/SpatIndData/"), pattern = "*SpatIndData*")
       load(paste0(si.stk.path, IndexFolder, "/", SurveyFolder, "/SpatIndData/", si_file))
       
-      # Get stock assessment reference points
+      # Get survey years
       yrs <- si$Year
       print(noquote(paste0("Survey years: ", min(yrs), " to ", max(yrs))))
       
+      # Get stock assessment reference points
       # Calculate SSB/MSY Btrigger
       msybtrig_refpt <- allstk_refpts$MSY_Btrigger[allstk_refpts$stk_name == stk.chr]
       ssb.msybtrig <- as.data.frame(ssb(stk)/msybtrig_refpt) %>%
