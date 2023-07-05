@@ -81,11 +81,6 @@ spi_prep <- function(hlhh, yrs, qrs, species_aphia, stk_divs){
   s7$Year <- as.numeric(as.character(s7$Year))
   s7$Quarter <- as.numeric(as.character(s7$Quarter))
   
-  s7 <- s7 %>%
-    mutate(Quarter.d = ifelse(Quarter == 1, 0, ifelse(Quarter == 3, 50, NA)),
-           Year_Quart = paste0(Year,".", Quarter.d))
-  
-  s7$Year_Quart <- as.numeric(as.character(s7$Year_Quart))
   return(s7)
 }
 
@@ -136,7 +131,8 @@ pa_rect <- function(hh, hlhh, yrs, qrs, species_aphia, stk_divs){
            Quarter %in% qrs,
            HaulVal != "I") %>% # remove invalid hauls
     group_by(Year) %>%
-    summarise(nrects = length(unique(StatRec)))
+    summarise(nrects = length(unique(StatRec))) %>%
+    mutate(Quarter = paste(as.character(sort(qrs)), collapse = ", "))
   
   #### How many rectangles sampled where species were present?
   p.rects <- hlhh %>%
@@ -146,14 +142,17 @@ pa_rect <- function(hh, hlhh, yrs, qrs, species_aphia, stk_divs){
            HaulVal != "I") %>% # remove invalid hauls
     group_by(Year) %>%
     filter(Valid_Aphia == species_aphia) %>%
-    summarise(nrects_p = length(unique(StatRec)))
+    summarise(nrects_p = length(unique(StatRec))) %>%
+    mutate(Quarter = paste(as.character(sort(qrs)), collapse = ", "))
   
   # sometimes p.rects has less rows because some years the species isnt found.
   # we need to add those years into the df so we can bind the two dfs
   if(nrow(n.rects)!= nrow(p.rects)){
     missing_yrs <- setdiff(n.rects$Year, p.rects$Year)
     missing_vals <- rep(0, length(missing_yrs))
-    missing_rows <- as.data.frame(cbind("Year" = missing_yrs, "nrects_p" = missing_vals))
+    missing_rows <- as.data.frame(cbind("Year" = missing_yrs, 
+                                        "nrects_p" = missing_vals, 
+                                        "Quarter" = paste(as.character(sort(qrs)), collapse = ", ")))
     p.rects <- p.rects %>%
       rows_append(missing_rows) %>%
       arrange(Year)
@@ -161,13 +160,13 @@ pa_rect <- function(hh, hlhh, yrs, qrs, species_aphia, stk_divs){
   
   ### Join together and calculate proportion of hauls present
   np.rects <- suppressMessages(bind_cols(n.rects, p.rects) %>%
-    mutate(PosArea = nrects_p/nrects))
+    mutate(PosAreaR = nrects_p/nrects))
   
   ### formatting for plots
   #### change some colnames
-  colnames(np.rects) <- c("Year", "nrects", "Year...3", "nrects_p", "PosArea")
-  np.rects <- np.rects[c("Year", "nrects", "nrects_p", "PosArea")]
-  #### Convert year and quarter to discrete values while maintain their original value
+  colnames(np.rects) <- c("Year", "nrects", "Quarter", "Year...4", "nrects_p", "Quarter...6", "PosAreaR")
+  np.rects <- np.rects[c("Year", "Quarter", "nrects", "nrects_p", "PosAreaR")]
+  #### Convert year to discrete values while maintain their original value
   np.rects$Year <- as.numeric(as.character(np.rects$Year))
 
   ### Return
@@ -186,7 +185,8 @@ pa_haul <- function(hh, hlhh, yrs, qrs, species_aphia, stk_divs){
            Quarter %in% qrs,
            HaulVal != "I") %>% # remove invalid hauls
     group_by(Year) %>%
-    summarise(no_haul.ids = length(unique(haul.id)))
+    summarise(no_haul.ids = length(unique(haul.id))) %>%
+    mutate(Quarter = paste(as.character(sort(qrs)), collapse = ", "))
   
   ### How many hauls in each quarter where species were present?
   p.hauls <- hlhh %>% 
@@ -196,14 +196,17 @@ pa_haul <- function(hh, hlhh, yrs, qrs, species_aphia, stk_divs){
            HaulVal != "I") %>% # remove invalid hauls
     group_by(Year) %>%
     filter(Valid_Aphia == species_aphia) %>%
-    summarise(pr_hauls = length(unique(haul.id)))
+    summarise(pr_hauls = length(unique(haul.id))) %>%
+    mutate(Quarter = paste(as.character(sort(qrs)), collapse = ", "))
 
   # sometimes p.rects has less rows because some years the species isnt found.
   # we need to add those years into the df so we can bind the two dfs
   if(nrow(n.hauls)!= nrow(p.hauls)){
     missing_yrs <- setdiff(n.hauls$Year, p.hauls$Year)
     missing_vals <- rep(0, length(missing_yrs))
-    missing_rows <- as.data.frame(cbind("Year" = missing_yrs, "pr_hauls" = missing_vals))
+    missing_rows <- as.data.frame(cbind("Year" = missing_yrs, 
+                                        "pr_hauls" = missing_vals,
+                                        "Quarter" = paste(as.character(sort(qrs)), collapse = ", ")))
     p.hauls <- p.hauls %>%
       rows_append(missing_rows) %>%
       arrange(Year)
@@ -211,11 +214,11 @@ pa_haul <- function(hh, hlhh, yrs, qrs, species_aphia, stk_divs){
   
   ### Join together
   np.hauls <- suppressMessages(bind_cols(n.hauls, p.hauls) %>%
-    mutate(PosArea = pr_hauls/no_haul.ids))
+    mutate(PosAreaH = pr_hauls/no_haul.ids))
   
   ### formatting for plots
-  colnames(np.hauls) <- c("Year", "no_haul.ids", "Year...3", "pr_hauls", "PosArea")
-  np.hauls <- np.hauls[c("Year", "no_haul.ids", "pr_hauls", "PosArea")]
+  colnames(np.hauls) <- c("Year", "no_haul.ids", "Quarter", "Year...4", "pr_hauls", "Quarter...6", "PosAreaH")
+  np.hauls <- np.hauls[c("Year", "Quarter", "no_haul.ids", "pr_hauls", "PosAreaH")]
   np.hauls$Year <- as.numeric(as.character(np.hauls$Year))
   
   ### return
@@ -237,9 +240,10 @@ lorenz_data <- function(hlhh, yrs, qrs, species_aphia, stk_divs){
     select(haul.id, Year, StatRec, HaulDur) %>%
     distinct() %>%
     na.omit() %>%
-    mutate(TotalNo = 0, # add 0 TotalNo 
+    mutate(TotalNo = as.numeric(0), # add 0 TotalNo 
            Valid_Aphia = species_aphia) %>% # add species aphia
-    select(haul.id, Valid_Aphia, Year, StatRec, TotalNo, HaulDur) # rearrange cols
+    select(haul.id, Valid_Aphia, Year, StatRec, TotalNo, HaulDur) %>% # rearrange cols
+    mutate(Quarter = paste(as.character(sort(qrs)), collapse = ", "))
   
   if(all(unique(allspcs_lor$Year), unique(hlhh$Year)) == FALSE){
     warning("Not all survey years were retained in `allspcs_lor`.")
@@ -254,7 +258,10 @@ lorenz_data <- function(hlhh, yrs, qrs, species_aphia, stk_divs){
            Quarter %in% qrs,
            HaulVal != "I") %>% # remove invalid hauls
     select(haul.id, Valid_Aphia, Year, StatRec, TotalNo, HaulDur) %>%
+    mutate(TotalNo = as.numeric(TotalNo), 
+           Quarter = paste(as.character(sort(qrs)), collapse = ", ")) %>%
     filter(Valid_Aphia == species_aphia) %>%
+    relocate(haul.id, Valid_Aphia, Year, Quarter, StatRec, TotalNo, HaulDur) %>%
     distinct() %>%
     na.omit() 
   
@@ -287,7 +294,7 @@ lorenz_plot <- function(lorenz_data){
   geom_abline() +
   geom_vline(xintercept = 0.95, lty = 2, colour = "black", linewidth = 1) +
   coord_cartesian(ylim= c(0,1), xlim = c(0,1), expand = FALSE) +
-    labs(title = paste0("Lorenz Curve: Distribution of ", species), 
+    labs(title = paste0("Lorenz Curve: Distribution of ", species, " (", min(lorenz_data$Year),":", max(lorenz_data$Year), ", Q", unique(lorenz_data$Quarter), ")"), 
          subtitle = "Dashed line = Proportion of population observed within 95% of rectangles (D95)",
 x = "Culmuative Number of Rectangles (%/100)", 
 y = "Culmuative Sum of Species Counts (%/100)") +
@@ -302,10 +309,12 @@ y = "Culmuative Sum of Species Counts (%/100)") +
 }
 
 ################################ Gini Index ###################################
-Gini <- function(lorenz_data){
-    G <- lorenz_data %>%
+Gini <- function(lorenz){
+    G <- lorenz %>%
       group_by(Year) %>%
-      summarise('Gini Index' = ineq(TotalNo_Dur, type = "Gini"))
+      summarise('Gini Index' = ineq(TotalNo_Dur, type = "Gini")) %>%
+      mutate(Quarter = unique(lorenz$Quarter)) %>%
+      relocate(Year, Quarter)
     G$'Gini Index' <- 1- G$'Gini Index' # take inverse, higher = more distributed
     G$'Gini Index'[is.nan(G$'Gini Index')] <- 0 # change NaNs to 0
     G$Year <- as.numeric(as.character(G$Year))
@@ -332,6 +341,9 @@ d95 <- function(lorenz_data){
   }
   colnames(D95_d) <- c("Year", "Index_loc", "D95_cumsum", "D95")
   D95_d$D95[is.nan(D95_d$D95)] <- 0 # change NaNs to 0
-  D95_d$Year <- as.numeric(as.character(D95_d$Year))
+  D95_d$Year <- as.numeric(as.character(D95_d$Year)) 
+  D95_d <- D95_d %>%
+    mutate(Quarter = unique(lorenz_data$Quarter)) %>%
+    relocate(Year, Quarter, Index_loc, D95_cumsum, D95)
   return(D95_d)
 }
