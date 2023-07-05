@@ -23,9 +23,16 @@ prepsurveydata <- function(hh, hl, ca, ices_rect){
   area_div <- dplyr::distinct(ices_rect[c("ICESNAME", "Area_27", "Shape_Area")])
   
   hh <- merge.data.frame(hh2,     
-                              area_div,
-                              by.x = "StatRec",
-                              by.y = "ICESNAME")
+                         area_div,
+                         by.x = "StatRec",
+                         by.y = "ICESNAME")
+  message("Checking merge")
+  ### check that the merge did not result in multiplication of rows
+  if(!(nrow(hh) == nrow(hh2))){
+    warning("Merge not correct. Number of rows between old and new dataset are not identical")
+  }
+  rm(hh2)
+  tictoc::toc()
   
   # Create lon_lat to see unique combinations later
   ## using Shoot
@@ -37,67 +44,48 @@ prepsurveydata <- function(hh, hl, ca, ices_rect){
   # was there a reason that it was always -9??? (SNS survey)
   message("Removing rows in hl where TotalNo < 0")
   hl <- subset(hl, TotalNo >= 0)
-
+  
+  tictoc::tic()
   message("Merging hl and hh data into hlhh")
   # Create a Haul ID
   hh$haul.id <- as.character(paste(hh$Year, 
-                                        hh$Quarter, 
-                                        hh$Country, 
-                                        hh$Ship, 
-                                        hh$Gear, 
-                                        hh$StNo, 
-                                        hh$HaulNo, 
-                                        sep = ":"))
-  
+                                   hh$Quarter, 
+                                   hh$Country, 
+                                   hh$Ship, 
+                                   hh$Gear, 
+                                   hh$StNo, 
+                                   hh$HaulNo, 
+                                   sep = ":"))
   hl$haul.id <- as.character(paste(hl$Year, 
-                                        hl$Quarter, 
-                                        hl$Country, 
-                                        hl$Ship, 
-                                        hl$Gear, 
-                                        hl$StNo, 
-                                        hl$HaulNo, 
-                                        sep = ":"))
-  
-  message("Checking merge")
-  
-  ### check that the merge did not result in multiplication of rows
-  if(!(nrow(hh) == nrow(hh2))){
-    warning("Merge not correct. Number of rows between old and new dataset not the same")
-  }
-  rm(hh2)
-  tictoc::toc()
+                                   hl$Quarter, 
+                                   hl$Country, 
+                                   hl$Ship, 
+                                   hl$Gear, 
+                                   hl$StNo, 
+                                   hl$HaulNo, 
+                                   sep = ":"))
   
   ## merge location data from HH to HL species data
-  tictoc::tic()
-  message("Merging HH data with the HL dataset")
-  
-  ## check which columns are identical 
+  # check which columns are identical 
   cols <- janitor::compare_df_cols(hh, hl)
   na.omit(cols[cols$hh == cols$hl,])
-  
   m <- hh[c("haul.id", "Year", "Quarter", "Month", "Survey","Country", 
-                 "Ship", "Gear", "GearEx", "DoorType", "HaulDur", "HaulNo", 
-                 "StNo", "SweepLngt", "StatRec", "Area_27", "ShootLong", "ShootLat", "lon_lat", "HaulVal", "Depth")]
-  
+            "Ship", "Gear", "GearEx", "DoorType", "HaulDur", "HaulNo", 
+            "StNo", "SweepLngt", "StatRec", "Area_27", "ShootLong", "ShootLat", "lon_lat", "HaulVal", "Depth")]
   hlhh <- merge(hl,
-                     dplyr::distinct(m),
-                     c("haul.id", "Year", "Quarter", "HaulNo", "StNo", "Gear", "GearEx", "DoorType","Ship", 
-                       "SweepLngt", "Country"))
+                dplyr::distinct(m),
+                c("haul.id", "Year", "Quarter", "HaulNo", "StNo", "Gear", "GearEx", "DoorType","Ship", 
+                  "SweepLngt", "Country"))
   
   message("Some data might be removed after merging hh and hl. This is typically due to haul.id's in HL not being in HH. Check which rows were removed, if any, by using the following code:")
-  
   print("anti_join(SURVEY_NAME.data$hl, SURVEY_NAME.data$hlhh, by = c('haul.id','Year','Quarter','Country','Ship','Gear','SweepLngt','GearEx','DoorType','StNo','HaulNo','TotalNo','HaulDur'))",
         quote = FALSE)
-  
   
   ## create list of datasets
   data.list <- list(hh = hh, 
                     hl = hl, 
                     ca = ca, 
                     hlhh = hlhh)
-                    #hl1_tot = hl1_tot,
-                    #bts_hlhh1_tot = hlhh1_tot)
-  
   tictoc::toc()
   return(data.list)
 }
