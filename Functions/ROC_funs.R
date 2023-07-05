@@ -182,7 +182,7 @@ roc_group <- function(SpatInds, StatusInds, stk_status, stk_name, species_name, 
        #main = paste0("ROC: Indicators vs ", stk_status," (",species$spcs,")"),
        #sub = paste0("Stock: ", names(stk)))
   
-  for(stk_index in colnames(SpatInds[3:length(colnames(SpatInds))])){
+  for(stk_index in colnames(SpatInds[match("Gini Index", colnames(SpatInds)):length(colnames(SpatInds))])){
   # Create dataset with all spatial indicators and true stock status
   all_data <- Reduce(function(x, y) merge(x, y, by = "Year"), list(SpatInds, StatusInds))
 
@@ -357,7 +357,7 @@ tss_group2 <- function(SpatInds, StatusInds, stk_status, stk_name, species_name,
   #main = paste0("ROC: Indicators vs ", stk_status," (",species$spcs,")"),
   #sub = paste0("Stock: ", names(stk)))
   
-  for(stk_index in colnames(SpatInds[3:length(colnames(SpatInds))])){
+  for(stk_index in colnames(SpatInds[match("Gini Index", colnames(SpatInds)):length(colnames(SpatInds))])){
     par(mar = c(5,5,3,18), xpd = T)
     
     # Create dataset with all spatial indicators and true stock status
