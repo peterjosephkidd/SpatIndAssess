@@ -144,8 +144,8 @@ roc_group <- function(SpatInds, StatusInds, stk_status, stk_name, species_name, 
   cols <- 2
   stack <- 0.95
   
-  qrs_text <- paste(qrs[1], qrs[2], qrs[3], qrs[4], sep = ", ")
-  qrs_text <- gsub(", NA", "", qrs_text )
+  qrs <- unique(SpatInds$Quarter)
+  qrs_text <- paste(as.character(sort(qrs)), collapse = ", ")
   
   #x11(width = 20, height = 15)
   par(mar = c(5,5,5,22), xpd = T)
@@ -182,7 +182,7 @@ roc_group <- function(SpatInds, StatusInds, stk_status, stk_name, species_name, 
        #main = paste0("ROC: Indicators vs ", stk_status," (",species$spcs,")"),
        #sub = paste0("Stock: ", names(stk)))
   
-  for(stk_index in colnames(SpatInds[-1])){
+  for(stk_index in colnames(SpatInds[3:length(colnames(SpatInds))])){
   # Create dataset with all spatial indicators and true stock status
   all_data <- Reduce(function(x, y) merge(x, y, by = "Year"), list(SpatInds, StatusInds))
 
@@ -236,8 +236,7 @@ tss_group <- function(SpatInds, StatusInds, stk_status, stk_name, species_name){
   cols <- 2
   stack <- 0.95
   
-  qrs_text <- paste(qrs[1], qrs[2], qrs[3], qrs[4], sep = ", ")
-  qrs_text <- gsub(", NA", "", qrs_text)
+  qrs_text <- paste(as.character(sort(qrs)), collapse = ", ")
   #x11(width = 20, height = 15)
   par(mar = c(5,5,5,22), xpd = T)
   p <- recordPlot()
@@ -322,8 +321,8 @@ tss_group2 <- function(SpatInds, StatusInds, stk_status, stk_name, species_name,
   cols <- 2
   stack <- 0.95
   
-  qrs_text <- paste(qrs[1], qrs[2], qrs[3], qrs[4], sep = ", ")
-  qrs_text <- gsub(", NA", "", qrs_text)
+  qrs <- unique(SpatInds$Quarter)
+  qrs_text <- paste(as.character(sort(qrs)), collapse = ", ")
   #x11(width = 20, height = 15)
   par(mar = c(5,5,5,22), xpd = T)
   p <- recordPlot()
@@ -358,7 +357,7 @@ tss_group2 <- function(SpatInds, StatusInds, stk_status, stk_name, species_name,
   #main = paste0("ROC: Indicators vs ", stk_status," (",species$spcs,")"),
   #sub = paste0("Stock: ", names(stk)))
   
-  for(stk_index in colnames(SpatInds[-1])){
+  for(stk_index in colnames(SpatInds[3:length(colnames(SpatInds))])){
     par(mar = c(5,5,3,18), xpd = T)
     
     # Create dataset with all spatial indicators and true stock status
