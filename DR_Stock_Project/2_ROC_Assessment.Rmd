@@ -405,6 +405,12 @@ for(indx in 1:length(stk_data_filtered)){
     ## rename some columns
     colnames(si)[colnames(si) == "PosAreaH"] <- "Positive Area (Haul)"
     colnames(si)[colnames(si) == "PosAreaR"] <- "Positve Area (Rectangle)"
+    si <- si %>%
+      mutate(SurveyIndex = names(stk_data_filtered[indx]),
+             Survey = names(stk_data_filtered[[indx]][survey]),
+             StockID = stk.chr) %>%
+      relocate(StockID, SurveyIndex, Survey, Year, Quarter, `Gini Index`, D95, `Positive Area (Haul)`, `Positve Area (Rectangle)`, SPI)
+    # Gini must be the first spat ind column for the roc and tss funs
     
   ### Save
   ## Create directories
