@@ -127,10 +127,6 @@ Number of levels = ", length(unique(roc$label)), "; ",
   rows_insert(init) %>%
   arrange(ind)
   
-  message("Plot basic ROC curve with: 
-          
-plot(roc$FPR, roc$TPR, type = 'l', xlim = c(0,1), ylim = c(0,1))
-abline(0,1, lwd = 2)")
   return(roc)
 }
 
