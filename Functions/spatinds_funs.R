@@ -630,13 +630,28 @@ chullAOC <- function(hlhh, yrs, qrs, species_aphia, stk_divs){
 
 
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
-#>                                Centre of Gravity                                      
+#>              Centre of Gravity and Inertia                                     
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
 #>                                                                              
 #> Function for calculating centre of gravity (x and y), inertia, and the area  
 #> of the inertia ellipse around the centre of gravity                          
 #>                                                                              
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+
+cog <- function(longitude, latitude){
+  cog_xy <- c(mean(longitude), mean(latitude))
+  return(cog_xy)
+}
+
+inertia <- function(longitude, latitude){
+  ### Centre of gravity
+  cg_x <- mean(longitude)
+  cg_y <- mean(latitude)
+  ### Inertia
+  inert <- sum(longitude-cg_x)^2 + sum(latitude-cg_y)^2
+  return(inert)
+}
+
 coginert <- function(hlhh, yrs, qrs, species_aphia, stk_divs){
   cog_data <- hlhh %>%
     filter(Area_27 %in% stk_divs,
