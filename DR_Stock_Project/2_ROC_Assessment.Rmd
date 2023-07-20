@@ -126,8 +126,8 @@ Change `stk` and `stk.chr` to the stock you want to run the ROC analysis for.
 ### Stocks available
 unique(allstk_metadata$stk_id) # ignore so.27.7d for now, need to find YFS survey data
 ### Select the stock to analyse
-stk <- had.27.46a20
-stk.chr <- "had.27.46a20"
+stk <- tur.27.4
+stk.chr <- "tur.27.4"
 ```
 
 ### Species Name
@@ -321,8 +321,8 @@ Here we calculate time-series of spatial indicators and plot this time series. T
 si.output.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/10Stock_Outputs/"
 
 ### Calculate spatial indicators for every year in each individual time series of survey data
-#indx <- "UK-BTS"
-#survey <- "UK-BTS"
+indx <- "IBTS Q1"
+survey <- "NS-IBTS"
 for(indx in 1:length(stk_data_filtered)){
   for(survey in 1:length(stk_data_filtered[[indx]])){
     # get survey name within this survey index
@@ -391,6 +391,32 @@ for(indx in 1:length(stk_data_filtered)){
     spi$SPI <- 1-spi$SPI 
     #### Then change NaNs to 0
     spi$SPI[is.nan(spi$SPI)] <- 0 
+    
+    ### Spreading Area
+    print(noquote("Spreading Area"))
+    sa_data <- spreadingarea_data(
+      hlhh = hlhh,
+      yrs = yrs,
+      qrs = qrs,
+      species_aphia = species_aphia,
+      stk_divs = stk_divs
+    )
+    sa <- sa_data %>%
+      group_by(Year) %>%
+      summarise("Spreading Area" = spreadingarea_calc(TotalNo_Dur)) %>%
+      mutate("Spreading Area (scaled)" = `Spreading Area`/max(`Spreading Area`),
+             Quarter = paste(as.character(sort(unique(sa_data$Quarter))), collapse = ", ")) %>% # add quarters
+      relocate(Year, Quarter)
+    
+    ### Equivalent Area 
+    print(noquote("Equivalent Area"))
+    ea <- sa_data %>%
+      group_by(Year) %>%
+      summarise("Equivalent Area" = equivalentarea(TotalNo_Dur)) %>%
+      mutate("Equivalent Area (scaled)" = `Spreading Area`/max(`Spreading Area`),
+             Quarter = paste(as.character(sort(unique(sa_data$Quarter))), collapse = ", ")) %>% # add quarters
+      relocate(Year, Quarter)
+      
 ################################################################################
     ### Merge all spatial indicator values into a single data frame
     message("Merging and saving spatial indicator data...")
@@ -458,7 +484,7 @@ for(indx in 1:length(stk_data_filtered)){
       # Axes breaks
       #coord_cartesian(ylim = c(0,1)) +
       scale_y_continuous(limits = c(0,1), breaks = seq(0,1,0.1)) +
-      scale_x_continuous(limits = c(min(si_long$Year), max(si_long$Year)), breaks = seq(min(si_long$Year), max(si_long$Year), 2)) +
+      scale_x_continuous(limits = c(min(si_long$Year), max(si_long$Year)), breaks = seq(min(si_long$Year), max(si_long$Year), 2), expand = c(0,0)) +
       # Theme
       theme(plot.title = element_text(size = 10, face = "bold"),
             plot.subtitle = element_text(size = 8),
@@ -497,8 +523,8 @@ Now we use the spatial indicator times series data, along with the stock assessm
 ```{r}
 si.stk.path <- paste0("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/10Stock_Outputs/", stk.chr, "/")
 
-#IndexFolder <- "FR-GFS"
-#SurveyFolder <- "FR-CGFS"
+IndexFolder <- "IBTS Q1"
+SurveyFolder <- "NS-IBTS"
 
 for(IndexFolder in list.files(si.stk.path)){
   message(paste0("Survey Index: ", IndexFolder))
@@ -573,6 +599,9 @@ for(IndexFolder in list.files(si.stk.path)){
 ## Spatial Indicator Time Series with Optimum Threshold
 ```{r}
 si.stk.path <- paste0("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/10Stock_Outputs/", stk.chr, "/")
+
+IndexFolder <- "IBTS Q1"
+SurveyFolder <- "NS-IBTS"
 
 for(IndexFolder in list.files(si.stk.path)){
   message(paste0("Survey Index: ", IndexFolder))
@@ -699,20 +728,25 @@ for(IndexFolder in list.files(si.stk.path)){
       
       ## create the plot
       si_plot <- ggplot() +
+      # Shadow rects
+      geom_rect(data = posyrsdf, inherit.aes = F, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, group = posyrsgroup), fill = "lightgrey", alpha = 0.1) +
+      # si line plot
       geom_line(data = si_long, aes(x = Year, 
                                     y = `Spatial Indicator Value`, 
                                     group = `Spatial Indicator (TSS)`, 
                                     colour = `Spatial Indicator (TSS)`),
                                     linewidth = 0.4,
                                     key_glyph = "rect") +
+      # ssb line plot
       geom_line(data = stkssb, aes(x = year, y = data, colour = "SSB/MSY Btrigger"), lty = 1, linewidth = 0.4, alpha = 1, show.legend = TRUE) +
+      # si opt thresh
       geom_hline(data = spatoptdf, aes(yintercept = OptThresh, group = `Spatial.Indicator`, colour = `Spatial.Indicator`), linetype = 2, alpha = 1, linewidth = 0.2) +
       labs(title = paste0("Spatial Indicator Time Series for ", stk.chr),
            subtitle = paste0("Survey Index: ", IndexFolder, 
                              " | Survey: ", SurveyFolder, 
                              " (", min(yrs), "-", max(yrs), ", Q", qrs_text, ")")) +
+      # ssb thresh
       geom_hline(yintercept = ssbthresh, lty = 2, linewidth = 0.2, alpha = 0.5) +
-      geom_rect(data = posyrsdf, inherit.aes = F, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, group = posyrsgroup), fill = "grey", alpha=0.1) +
       # Axes breaks
       #coord_cartesian(ylim = c(0,1)) +
       scale_y_continuous(limits = c(0,1), breaks = seq(0,1,0.1)) +
@@ -751,68 +785,75 @@ for(IndexFolder in list.files(si.stk.path)){
 
 ## Store AUC and TSS values
 ```{r}
-auctss <- data.frame("Survey Index" = NA, "Survey" = NA, "Years" = NA, "Quarter" = NA, "Spatial.Indicator" = NA, "TSS" = NA, "AUC" = NA)
-for(IndexFolder in list.files(si.stk.path)){
-  message(paste0("Survey Index: ", IndexFolder))
-  for(SurveyFolder in list.files(paste0(si.stk.path, IndexFolder, "/"))){
-    print(noquote(paste0("Survey: ", SurveyFolder)))
-      # Load Spatial Indicator Data
-      si_file <- list.files(paste0(si.stk.path, IndexFolder, "/", SurveyFolder, "/SpatIndData/"), pattern = "*SpatIndData*")
-      load(paste0(si.stk.path, IndexFolder, "/", SurveyFolder, "/SpatIndData/", si_file))
-      
-      # Get survey years
-      yrs <- si$Year
-      qrs <- unique(si$Quarter)
-      print(noquote(paste0("Survey years: ", min(yrs), " to ", max(yrs))))
-      
-      # Get stock assessment reference points
-      # Calculate SSB/MSY Btrigger
-      msybtrig_refpt <- allstk_refpts$MSY_Btrigger[allstk_refpts$stk_name == stk.chr]
-      ssb.msybtrig <- as.data.frame(ssb(stk)/msybtrig_refpt) %>%
-        filter(year %in% yrs) %>%
-        select(year, data) %>%
-        rename(Year = year, SSB.MSYBtrigger = data)
-      
-      # Path location
-      path.spatopt <- paste0(si.stk.path, IndexFolder, "/", SurveyFolder, "/SpatIndPlot")
-      # Create output directories
-      if(dir.exists(path.spatopt) == FALSE){
-        dir.create(path.spatopt)
-      }
-      
-      # Calculate ROC and TSS and store outputs
-      spatindcols <- colnames(si[match("Gini Index", colnames(si)):length(colnames(si))])
-      outputs <- data.frame("Survey Index" = IndexFolder,
-                              "Survey" = SurveyFolder,
-                              "Years" = paste0(min(yrs), "-", max(yrs)),
-                              "Quarter" = qrs,
+allsipaths <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/10Stock_Outputs/"
+
+auctss <- data.frame("Stock ID" = NA, "Survey Index" = NA, "Survey" = NA, "Years" = NA, "Quarter" = NA, "Spatial.Indicator" = NA, "TSS" = NA, "AUC" = NA)
+
+for(StockFolder in list.files(allsipaths)){
+  message(paste0("Stock Name: ", StockFolder))
+  for(IndexFolder in list.files(paste0(allsipaths, StockFolder))){
+    print(noquote(paste0("Survey Index: ", IndexFolder)))
+    for(SurveyFolder in list.files(paste0(allsipaths, StockFolder, "/", IndexFolder))){
+      print(noquote(paste0("   Survey Name: ", SurveyFolder)))
+        # Load Spatial Indicator Data
+        si_file <- list.files(paste0(allsipaths, StockFolder, "/", IndexFolder, "/", SurveyFolder, "/SpatIndData/"), pattern = "*SpatIndData*")
+        load(paste0(allsipaths, StockFolder, "/", IndexFolder, "/", SurveyFolder, "/SpatIndData/", si_file))
+        
+        # Get survey years
+        yrs <- si$Year
+        qrs <- unique(si$Quarter)
+        print(noquote(paste0("Survey years: ", min(yrs), " to ", max(yrs))))
+        
+        # Get stock assessment reference points
+        # Calculate SSB/MSY Btrigger
+        msybtrig_refpt <- allstk_refpts$MSY_Btrigger[allstk_refpts$stk_name == stk.chr]
+        ssb.msybtrig <- as.data.frame(ssb(stk)/msybtrig_refpt) %>%
+          filter(year %in% yrs) %>%
+          select(year, data) %>%
+          rename(Year = year, SSB.MSYBtrigger = data)
+        
+        # Path location
+        path.spatopt <- paste0(allsipaths, StockFolder, "/", IndexFolder, "/", SurveyFolder, "/SpatIndPlot")
+        # Create output directories
+        if(dir.exists(path.spatopt) == FALSE){
+          dir.create(path.spatopt)
+        }
+        
+        # Calculate ROC and TSS and store outputs
+        spatindcols <- colnames(si[match("Gini Index", colnames(si)):length(colnames(si))])
+        outputs <- data.frame("Stock ID" = rep(StockFolder, length(spatindcols)),
+                              "Survey Index" = rep(IndexFolder, length(spatindcols)),
+                              "Survey" = rep(SurveyFolder, length(spatindcols)),
+                              "Years" = rep(paste0(min(yrs), "-", max(yrs)), length(spatindcols)),
+                              "Quarter" = rep(qrs, length(spatindcols)),
                               "Spatial.Indicator" = spatindcols, 
                               "TSS" = as.numeric(rep("NA", length(spatindcols))),
                               "AUC" = as.numeric(rep("NA", length(spatindcols))))
-      stk_status = "SSB.MSYBtrigger"
-      
-      for(stk_index in colnames(si[match("Gini Index", colnames(si)):length(colnames(si))])){
-        # Create dataset with all spatial indicators and true stock status
-        all_data <- Reduce(function(x, y) merge(x, y, by = "Year"), list(si, ssb.msybtrig))
+        stk_status = "SSB.MSYBtrigger"
         
-        all_data[ncol(all_data)+1] <- all_data[stk_index] # copies indicator to end column
-        colnames(all_data)[ncol(all_data)] <- "ind" # changes name of end column
-        all_data[ncol(all_data)+1] <- all_data[stk_status] # copies status to end column
-        colnames(all_data)[ncol(all_data)] <- "state" # changes name of end column
-      
-        # Retrieve TSS for each spatial indicator
-        roc <- roc_fun2(all_data, state = state, ind = ind)
-        opt_thresh_ind <- order(roc[,"TSS"],decreasing = T)[1]
-        opt_tss <- roc[opt_thresh_ind, "TSS"]
-        # Get AUC
-        x <- 1-roc$FPR
-        y <- roc$TPR
-        auc <- sum(diff(x)*rollmean(y,2))
-        # Add to data frame
-        outputs$TSS[outputs$Spatial.Indicator == stk_index] <- opt_tss
-        outputs$AUC[outputs$Spatial.Indicator == stk_index] <- auc
-      }
-      auctss <- rbind(auctss, outputs)
+        for(stk_index in colnames(si[match("Gini Index", colnames(si)):length(colnames(si))])){
+          # Create dataset with all spatial indicators and true stock status
+          all_data <- Reduce(function(x, y) merge(x, y, by = "Year"), list(si, ssb.msybtrig))
+          
+          all_data[ncol(all_data)+1] <- all_data[stk_index] # copies indicator to end column
+          colnames(all_data)[ncol(all_data)] <- "ind" # changes name of end column
+          all_data[ncol(all_data)+1] <- all_data[stk_status] # copies status to end column
+          colnames(all_data)[ncol(all_data)] <- "state" # changes name of end column
+        
+          # Retrieve TSS for each spatial indicator
+          roc <- roc_fun2(all_data, state = state, ind = ind)
+          opt_thresh_ind <- order(roc[,"TSS"],decreasing = T)[1]
+          opt_tss <- roc[opt_thresh_ind, "TSS"]
+          # Get AUC
+          x <- 1-roc$FPR
+          y <- roc$TPR
+          auc <- sum(diff(x)*rollmean(y,2))
+          # Add to data frame
+          outputs$TSS[outputs$Spatial.Indicator == stk_index] <- opt_tss
+          outputs$AUC[outputs$Spatial.Indicator == stk_index] <- auc
+        }
+        auctss <- rbind(auctss, outputs)
+    }
   }
 }
 auctss <- na.omit(auctss)
@@ -821,32 +862,14 @@ auctss <- na.omit(auctss)
 ## Summary plots of AUC and TSS
 ```{r}
 spat_colours <- setNames(c(2,3,4,5,6), c("Gini Index", "D95", "Positive Area (Haul)", "Positive Area (Rectangle)", "SPI")) 
+```
 
-# Total AUC across all surveys
+### Total AUC across all surveys, for all stocks
+```{r}
 ggplot() +
   geom_col(data = auctss, aes(y = AUC, x = Spatial.Indicator, fill = Spatial.Indicator)) +
   guides(fill = guide_legend(byrow = TRUE)) + # to enable vertical spacing between key glyphs
-  scale_fill_manual(values = spat_colours, guide = "legend") # custom colours matching ROC colours
-
-# Total TSS across all surveys
-ggplot() +
-  geom_col(data = auctss, aes(y = TSS, x = Spatial.Indicator, fill = Spatial.Indicator)) +
-  guides(fill = guide_legend(byrow = TRUE)) + # to enable vertical spacing between key glyphs
-  scale_fill_manual(values = spat_colours, guide = "legend") # custom colours matching ROC colours
-
-# Total AUC for each survey withiin each index
-ggplot() +
-  geom_col(data = auctss, aes(y = AUC, x = Spatial.Indicator, fill = Spatial.Indicator)) +
-  guides(fill = guide_legend(byrow = TRUE)) + # to enable vertical spacing between key glyphs
-  scale_fill_manual(values = spat_colours, guide = "legend") + # custom colours matching ROC colours
-  facet_grid(Survey.Index ~ Survey)
-
-# Total TSS for each survey withiin each index
-ggplot() +
-  geom_col(data = auctss, aes(y = TSS, x = Spatial.Indicator, fill = Spatial.Indicator), colour = "black") +
-  guides(fill = guide_legend(byrow = TRUE)) + # to enable vertical spacing between key glyphs
-  scale_fill_manual(values = spat_colours, guide = "legend") + # custom colours matching ROC colours
-  facet_grid(Survey.Index ~ Survey) +
+  scale_fill_manual(values = spat_colours, guide = "legend") +
   # Theme
   theme(plot.title = element_text(size = 10, face = "bold"),
             plot.subtitle = element_text(size = 8),
@@ -855,23 +878,143 @@ ggplot() +
             legend.text = element_text(size = 8),
             legend.background = element_blank(),
             legend.position = "right",
-            #legend.key = element_rect(colour="black", linewidth = 0.5), # border around glyphs
+            legend.key = element_rect(colour="black", linewidth = 0.5), # border around glyphs
             legend.key.width = unit(0.3, "cm"),
             legend.key.height = unit(0.3, "cm"),
             legend.spacing.y = unit(0.2, "cm"), # distance between each key glyph
             # Axes
             #axis.text = element_blank(),
             axis.text.x = element_blank(),
-            axis.title.x = element_blank(),
             axis.ticks.x = element_blank(),
             # Panels
             panel.grid.major = element_blank(),
             panel.grid.minor = element_blank(),
             panel.border = element_rect(colour = "black", fill = NA),
-            panel.background = element_rect(fill = "grey95"),
-            # Facet grid customisation
-            strip.background = element_rect(fill = "lightgrey", colour = "black")) +
-  labs(fill = "Spatial Indicator")
+            panel.background = element_rect(fill = "grey95")) +
+  labs(title = "Spatial indicator AUC across all surveys and stocks", 
+       x = "Spatial Indicator", 
+       y = "Area Under Curve (AUC)",
+       fill = "Spatial Indicator")
+```
+
+### Total TSS across all surveys, for all stocks
+```{r}
+ggplot() +
+  geom_col(data = auctss, aes(y = TSS, x = Spatial.Indicator, fill = Spatial.Indicator)) +
+  guides(fill = guide_legend(byrow = TRUE)) + # to enable vertical spacing between key glyphs
+  scale_fill_manual(values = spat_colours, guide = "legend") +
+  # Theme
+  theme(plot.title = element_text(size = 10, face = "bold"),
+            plot.subtitle = element_text(size = 8),
+            # Legend
+            legend.title = element_text(size = 9),
+            legend.text = element_text(size = 8),
+            legend.background = element_blank(),
+            legend.position = "right",
+            legend.key = element_rect(colour="black", linewidth = 0.5), # border around glyphs
+            legend.key.width = unit(0.3, "cm"),
+            legend.key.height = unit(0.3, "cm"),
+            legend.spacing.y = unit(0.2, "cm"), # distance between each key glyph
+            # Axes
+            #axis.text = element_blank(),
+            axis.text.x = element_blank(),
+            axis.ticks.x = element_blank(),
+            # Panels
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.border = element_rect(colour = "black", fill = NA),
+            panel.background = element_rect(fill = "grey95")) +
+  labs(title = "Spatial indicator TSS across all surveys and stocks", 
+       x = "Spatial Indicator", 
+       y = "True Skill Score (TSS)",
+       fill = "Spatial Indicator")
+
+```
+
+### Total AUC for each survey within each index, for all stocks
+```{r}
+for(stock in unique(auctss$Stock.ID)){
+  auctss_spcs <- auctss %>%
+    filter(Stock.ID == stock)
+  
+  sumaucplot <- ggplot() +
+    geom_col(data = auctss_spcs, aes(y = AUC, x = Spatial.Indicator, fill = Spatial.Indicator), colour = "black") +
+    guides(fill = guide_legend(byrow = TRUE)) + # to enable vertical spacing between key glyphs
+    scale_fill_manual(values = spat_colours, guide = "legend") + # custom colours matching ROC colours
+    facet_wrap(vars(Survey.Index, Survey)) +
+    #facet_grid(Stock.ID ~ Survey) +
+    scale_y_continuous(limits = c(0,1)) +
+    # Theme
+    theme(plot.title = element_text(size = 10, face = "bold"),
+              plot.subtitle = element_text(size = 8),
+              # Legend
+              legend.title = element_text(size = 9),
+              legend.text = element_text(size = 8),
+              legend.background = element_blank(),
+              legend.position = "right",
+              #legend.key = element_rect(colour="black", linewidth = 0.5), # border around glyphs
+              legend.key.width = unit(0.3, "cm"),
+              legend.key.height = unit(0.3, "cm"),
+              legend.spacing.y = unit(0.2, "cm"), # distance between each key glyph
+              # Axes
+              #axis.text = element_blank(),
+              axis.text.x = element_blank(),
+              axis.title.x = element_blank(),
+              axis.ticks.x = element_blank(),
+              # Panels
+              panel.grid.major = element_blank(),
+              panel.grid.minor = element_blank(),
+              panel.border = element_rect(colour = "black", fill = NA),
+              panel.background = element_rect(fill = "grey95"),
+              # Facet grid customisation
+              strip.background = element_rect(fill = "lightgrey", colour = "black")) +
+    labs(fill = "Spatial Indicator", title = paste0("AUC of spatial indicators across surveys (", stock, ")"))
+  
+  cowplot::save_plot(plot = sumaucplot, filename = paste0("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/10Stock_Outputs/", stock, "/", "sumAUC-", stock, ".png"))
+}
+```
+
+### Total TSS for each survey within each index, for all stocks
+```{r}
+for(stock in unique(auctss$Stock.ID)){
+  auctss_spcs <- auctss %>%
+    filter(Stock.ID == stock)
+  
+  sumtssplot <- ggplot() +
+    geom_col(data = auctss_spcs, aes(y = TSS, x = Spatial.Indicator, fill = Spatial.Indicator), colour = "black") +
+    guides(fill = guide_legend(byrow = TRUE)) + # to enable vertical spacing between key glyphs
+    scale_fill_manual(values = spat_colours, guide = "legend") + # custom colours matching ROC colours
+    facet_wrap(vars(Survey.Index, Survey)) +
+    #facet_grid(Stock.ID ~ Survey) +
+    scale_y_continuous(limits = c(-1,1)) +
+    # Theme
+    theme(plot.title = element_text(size = 10, face = "bold"),
+              plot.subtitle = element_text(size = 8),
+              # Legend
+              legend.title = element_text(size = 9),
+              legend.text = element_text(size = 8),
+              legend.background = element_blank(),
+              legend.position = "right",
+              #legend.key = element_rect(colour="black", linewidth = 0.5), # border around glyphs
+              legend.key.width = unit(0.3, "cm"),
+              legend.key.height = unit(0.3, "cm"),
+              legend.spacing.y = unit(0.2, "cm"), # distance between each key glyph
+              # Axes
+              #axis.text = element_blank(),
+              axis.text.x = element_blank(),
+              axis.title.x = element_blank(),
+              axis.ticks.x = element_blank(),
+              # Panels
+              panel.grid.major = element_blank(),
+              panel.grid.minor = element_blank(),
+              panel.border = element_rect(colour = "black", fill = NA),
+              panel.background = element_rect(fill = "grey95"),
+              # Facet grid customisation
+              strip.background = element_rect(fill = "lightgrey", colour = "black")) +
+    labs(fill = "Spatial Indicator", title = paste0("TSS of spatial indicators across surveys (", stock, ")"))
+  
+  cowplot::save_plot(plot = sumtssplot, filename = paste0("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/10Stock_Outputs/", stock, "/", "sumTSS-", stock, ".png"))
+}
 ```
 
 
