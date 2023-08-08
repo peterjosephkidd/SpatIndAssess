@@ -97,7 +97,7 @@ roc_fun2 <- function(all_data, state, ind){
 
 Number of levels = ", length(unique(roc$label)), "; ",
 "Label of the level = ", unique(roc$label), "; ",
-"Number of ", unique(roc$label), " state records = ", length(roc$label)))
+"Number of ", unique(roc$label), " state records = ", length(roc$label)), immediate. = TRUE)
   }
   # calculate ROC stats
   roc <- roc %>% mutate(
@@ -128,6 +128,69 @@ Number of levels = ", length(unique(roc$label)), "; ",
   arrange(ind)
   
   return(roc)
+}
+
+
+roc_fun3 <- function(all_data, state, inds, return = "long"){
+  
+  roc_widelist <- list()
+  roc_longlist <- list()
+  
+  for(i in 1:length(inds)){
+    ind <- inds[i]
+    # select data
+    roc2 <- all_data %>% select("Year", "Quarter", "StockID", "SurveyIndex", "Survey", `Survey Index, Survey Name`)
+    roc2$state <- all_data[state]
+    roc2$ind <- all_data[ind]
+    roc2$status <- as.vector(roc2$state >= 1)
+    roc2 <- arrange(roc2, ind)
+    
+    if(length(unique(roc$status)) < 2){
+      warning(paste0("\nIn all the survey years, the true status of the stock from stock assessments is ", 
+                     unique(roc$status),
+                     ".\n There needs to be contrast in status of the stock for ROC to be computed"), immediate. = TRUE)}
+    
+    # calculate ROC stats
+    roc <- roc2 %>% mutate(
+      TP = sum(roc2$status == TRUE) - cumsum(lag(roc2$status == TRUE, default = 0)),
+      FP = sum(roc2$status == FALSE) - cumsum(lag(status == FALSE, default = 0)),
+      TN = cumsum(lag(roc2$status == FALSE, default = 0)),
+      FN = cumsum(lag(status == TRUE, default = 0)),
+      TPR = (sum(roc2$status == TRUE) - cumsum(lag(roc2$status == TRUE, default = 0)))/(sum(roc2$status==TRUE)),
+      FPR = (sum(roc2$status == FALSE) - cumsum(lag(roc2$status == FALSE, default = 0)))/(sum(roc2$status==FALSE)),
+      TNR = cumsum(lag(roc2$status == FALSE, default = 0))/(sum(roc2$status==FALSE)),
+      TSS =  (sum(roc2$status == TRUE) - cumsum(lag(roc2$status == TRUE, default = 0)))/(sum(roc2$status==TRUE)) + cumsum(lag(roc2$status == FALSE, default = 0))/(sum(roc2$status==FALSE)) -1)# TPR + TNR - 1
+    
+    # create new last row with pseudo data to make ROC curve start at (FPR = 0, TPR = 0)
+    row <- c(998, unique(roc$Quarter), unique(roc$StockID), unique(roc$SurveyIndex), 
+             unique(roc$Survey), unique(roc$`Survey Index, Survey Name`),  
+             999, max(roc$ind)+ 0.01, NA, 0, 0, sum(roc$status==FALSE), 
+             sum(roc$status==TRUE), 0, 0, 1, 0)
+    
+    # bind (this changes all cols to character)
+    roc <- rbind(roc, row)
+    # ocnvert cols back to numeric
+    roc <- roc %>%
+      mutate_at(vars(Year, TP, FP, TN, FN, TPR, FPR, TNR, TSS), as.numeric)
+    # wide format
+    roc_widelist[[i]] <- roc
+    # long format (useful for ggplot)
+    roc_long <- roc %>% tidyr::pivot_longer(cols = c("ind"), 
+                                            names_to = "Spatial Indicator",
+                                            values_to = "Spatial Indicator Value")
+    roc_long$`Spatial Indicator` <- ind
+    roc_long <- as.data.table(roc_long)
+    roc_longlist[[i]] <- roc_long
+  }
+  
+  #rocall_wide <- do.call(rbind, roc_widelist)
+  # compress list of long dataframe
+  # rocall_long <- do.call(rbind, roc_longlist) # behaving weird with rownames so using datatable alternative:
+  roc_long <- as.data.frame(rbindlist(roc_longlist))
+  if(return == "widelist"){
+    return(roc_widelist)}else{
+      return(roc_long)
+    }
 }
 
 ################################################################################
