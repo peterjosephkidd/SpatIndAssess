@@ -32,7 +32,11 @@ options(download.file.method = "curl")
 
 # Load packages
 ```{r load.packages, message = FALSE}
-### load packages
+# Install FLR packages
+#remotes::install_github("flr/FLCore")
+#remotes::install_github("flr/FLBRP")
+
+# load packages
 pckgs <- c("FLCore", "FLBRP", "dplyr", "ggplot2", "ggplotFL", "rgdal", "DataExplorer", "rgeos", "sf", "mapplots", "maptools", "mapproj", "beepr", "patchwork", "ineq", "icesDatras", "icesVocab", "scales", "readxl", "data.table", "zoo")
 
 for(pkg in pckgs){
@@ -126,8 +130,8 @@ Change `stk` and `stk.chr` to the stock you want to run the ROC analysis for.
 ### Stocks available
 unique(allstk_metadata$stk_id) # ignore so.27.7d for now, need to find YFS survey data
 ### Select the stock to analyse
-stk <- tur.27.4
-stk.chr <- "tur.27.4"
+stk <- cod.27.47d20_nov
+stk.chr <- "cod.27.47d20_nov"
 ```
 
 ### Species Name
@@ -321,27 +325,27 @@ Here we calculate time-series of spatial indicators and plot this time series. T
 si.output.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/10Stock_Outputs/"
 
 ### Calculate spatial indicators for every year in each individual time series of survey data
-indx <- "IBTS Q1"
-survey <- "NS-IBTS"
+indx <- "UK-BTS"
+survey <- "UK-BTS"
 for(indx in 1:length(stk_data_filtered)){
   for(survey in 1:length(stk_data_filtered[[indx]])){
     # get survey name within this survey index
-    message(names(stk_data_filtered[indx]))
-    print(noquote(paste0("Survey Index:       ", names(stk_data_filtered[indx]))))
-    print(noquote(paste0("Survey:             ", names(stk_data_filtered[[indx]][survey]))))
+    message("---------------------------\n", names(stk_data_filtered[indx]))
+    writeLines(noquote(paste0("Survey Index:       ", names(stk_data_filtered[indx]))))
+    writeLines(noquote(paste0("Survey:             ", names(stk_data_filtered[[indx]][survey]))))
     # get filtered survey data
     hlhh <- stk_data_filtered[[indx]][[survey]]$hlhh
     hh <- stk_data_filtered[[indx]][[survey]]$hh
-    yrs <- unique(hlhh$Year)
+    yrs <- unique(hlhh$Year)[unique(hlhh$Year) < 2022] # make sure max does not exceed max year in 2022 stock assessment 
     qrs <- unique(hlhh$Quarter)
-    print(noquote(paste0("Survey years:       ", min(yrs), "-", max(yrs))))
-    print(noquote(paste0("Survey quarters:    ", qrs)))
+    writeLines(noquote(paste0("Survey years:       ", min(yrs), "-", max(yrs))))
+    writeLines(noquote(paste0("Survey quarters:    ", paste(sort(unique(qrs)), collapse = ", "))))
     
     ### Calculate spatial indicators for each survey
-    message("Calculating spatial indicators")
+    message("\nCalculating spatial indicators")
     ### Positive Area (by ICES rectangle)
-    print(noquote("Positive Area (Rectangle)"))
-    np.rects <- pa_rect(hh = hh, 
+    writeLines(noquote("Positive Area (Rectangle)"))
+    np.rects <- pa_rect( 
             hlhh = hlhh, 
             yrs = yrs, 
             qrs = qrs, 
@@ -349,8 +353,8 @@ for(indx in 1:length(stk_data_filtered)){
             stk_divs = stk_divs)
 
     ### Positive Area (by Haul)
-    print(noquote("Positive Area (Haul)"))
-    np.hauls <- pa_haul(hh = hh, 
+    writeLines(noquote("Positive Area (Haul)"))
+    np.hauls <- pa_haul(
             hlhh = hlhh, 
             yrs = yrs, 
             qrs = qrs, 
@@ -358,85 +362,123 @@ for(indx in 1:length(stk_data_filtered)){
             stk_divs = stk_divs)
     
     ### Lorenz curve data
-    print(noquote("Lorenz Curve"))
+    writeLines(noquote("Lorenz Curve"))
     lorenz <- lorenz_data(hlhh = hlhh, 
             yrs = yrs, 
             qrs = qrs, 
             species_aphia = species_aphia, 
             stk_divs = stk_divs)
+    
     #### Gini index
-    print(noquote("Gini Index"))
+    writeLines(noquote("Gini Index"))
     Gini.index <- Gini(lorenz)
 
     #### D95
-    print(noquote("D95"))
+    writeLines(noquote("D95"))
     D95 <- d95(lorenz)
     
     ### Spread of Participation Index (SPI)
     #### Prep data
-    print(noquote("Spread of Participation Index"))
-    spi_data <- spi_prep(hlhh = hlhh, 
-            yrs = yrs, 
-            qrs = qrs, 
-            species_aphia = species_aphia, 
-            stk_divs = stk_divs)
+    writeLines(noquote("Spread of Participation Index"))
+    #spi_data <- spi_prep(hlhh = hlhh, 
+    #        yrs = yrs, 
+    #        qrs = qrs, 
+    #        species_aphia = species_aphia, 
+    #        stk_divs = stk_divs)
     #### Calculate
-    spi <- spi_data %>% 
-      group_by(Year) %>% # Year only, not quarter
-      filter(Area_27 %in% stk_divs) %>%
-      summarise(SPI = spi_calc(TotalNo_TotalDur, area = 1)) %>% # area=1 = all rects equal weight
-      mutate(Quarter = paste(as.character(sort(unique(spi_data$Quarter))), collapse = ", ")) %>% # add quarters
-      relocate(Year, Quarter)
+    #spi <- spi_data %>% 
+    #  group_by(Year) %>% # Year only, not quarter
+    #  filter(Area_27 %in% stk_divs) %>%
+    #  summarise(SPI = spi_calc(TotalNo_TotalDur, area = 1)) %>% # area=1 = all rects equal weight
+    #  mutate(Quarter = paste(as.character(sort(unique(spi_data$Quarter))), collapse = ", ")) %>% # add quarters
+    #  relocate(Year, Quarter)
     #### Take inverse of SPI, so high numbers = good
-    spi$SPI <- 1-spi$SPI 
+    #spi$SPI <- 1-spi$SPI 
     #### Then change NaNs to 0
-    spi$SPI[is.nan(spi$SPI)] <- 0 
-    
-    ### Spreading Area
-    print(noquote("Spreading Area"))
-    sa_data <- spreadingarea_data(
+    #spi$SPI[is.nan(spi$SPI)] <- 0 
+    SPI <- spi(
       hlhh = hlhh,
       yrs = yrs,
       qrs = qrs,
       species_aphia = species_aphia,
       stk_divs = stk_divs
     )
+    
+    ### Spreading Area
+    writeLines(noquote("Spreading Area"))
+    sa_data <- spreadingarea_data(
+      hlhh = hlhh,
+      yrs = c(yrs),
+      qrs = c(qrs),
+      species_aphia = species_aphia,
+      stk_divs = stk_divs)
     sa <- sa_data %>%
       group_by(Year) %>%
       summarise("Spreading Area" = spreadingarea_calc(TotalNo_Dur)) %>%
-      mutate("Spreading Area (scaled)" = `Spreading Area`/max(`Spreading Area`),
-             Quarter = paste(as.character(sort(unique(sa_data$Quarter))), collapse = ", ")) %>% # add quarters
+      mutate(Quarter = paste(as.character(sort(unique(sa_data$Quarter))), collapse = ", ")) %>% # add quarters
       relocate(Year, Quarter)
     
     ### Equivalent Area 
-    print(noquote("Equivalent Area"))
+    writeLines(noquote("Equivalent Area"))
     ea <- sa_data %>%
       group_by(Year) %>%
       summarise("Equivalent Area" = equivalentarea(TotalNo_Dur)) %>%
-      mutate("Equivalent Area (scaled)" = `Spreading Area`/max(`Spreading Area`),
-             Quarter = paste(as.character(sort(unique(sa_data$Quarter))), collapse = ", ")) %>% # add quarters
+      mutate(Quarter = paste(as.character(sort(unique(sa_data$Quarter))), collapse = ", ")) %>% # add quarters
       relocate(Year, Quarter)
+    
+    ### Centre of Gravity, Inertia, & 95% CI Ellipse
+    writeLines(noquote("Centre of Gravity (x and y)"))
+    writeLines(noquote("Inertia"))
+    writeLines(noquote("95% CI Ellipse"))
+
+    cog <- coginert(
+      hlhh = hlhh,
+      yrs = yrs,
+      qrs = qrs,
+      species_aphia = species_aphia,
+      stk_divs = stk_divs)
+
+
+    ### Convex Hull Area
+    writeLines(noquote("Convex Hull Area"))
+    cha <- chullarea(
+      hlhh = hlhh,
+      yrs = yrs,
+      qrs = qrs,
+      species_aphia = species_aphia,
+      stk_divs = stk_divs)
+    
       
 ################################################################################
     ### Merge all spatial indicator values into a single data frame
-    message("Merging and saving spatial indicator data...")
+    message("\nMerging and saving spatial indicator data...")
     ## select the columns that we need
     Gini.index <- Gini.index[c("Year", "Quarter", "Gini Index")]
     D95 <- D95[c("Year", "Quarter", "D95")]
     np.hauls <- np.hauls[c("Year", "Quarter", "PosAreaH")]
     np.rects <- np.rects[c("Year", "Quarter", "PosAreaR")]
-    spi <- spi[c("Year", "Quarter", "SPI")]
+    SPI <- SPI[c("Year", "Quarter", "SPI")]
+    sa <- sa
+    ea <- ea
+    cog <- cog
+    cha <- cha[c("Year", "Quarter", "areaoccupied")]
     ## merge
-    si <- Reduce(function(x, y) merge(x, y, by = c("Year", "Quarter")), list(Gini.index, D95, np.hauls, np.rects, spi))
+    si <- Reduce(function(x, y) merge(x, y, by = c("Year", "Quarter")), list(Gini.index, D95, np.hauls, np.rects, SPI, sa, ea, cog, cha))
     ## rename some columns
-    colnames(si)[colnames(si) == "PosAreaH"] <- "Positive Area (Haul)"
-    colnames(si)[colnames(si) == "PosAreaR"] <- "Positive Area (Rectangle)"
     si <- si %>%
+      rename("Positive Area (Haul)" = PosAreaH,
+             "Positive Area (Rectangle)" = PosAreaR,
+             "CoG (x)" = cg_x,
+             "CoG (y)" = cg_y, 
+             "Inertia" = inertia,
+             "Ellipse Area" = area_of_ellipse,
+             "Convex Hull Area" = areaoccupied) %>%
       mutate(SurveyIndex = names(stk_data_filtered[indx]),
              Survey = names(stk_data_filtered[[indx]][survey]),
              StockID = stk.chr) %>%
-      relocate(StockID, SurveyIndex, Survey, Year, Quarter, `Gini Index`, D95, `Positive Area (Haul)`, `Positive Area (Rectangle)`, SPI)
+      relocate(StockID, SurveyIndex, Survey, Year, Quarter, `Gini Index`) #, D95, `Positive Area (Haul)`, `Positive Area (Rectangle)`, SPI) these might also have to be ordered to match roc order
     # Gini must be the first spat ind column for the roc and tss funs
+    
     
   ### Save
   ## Create directories
@@ -455,7 +497,10 @@ for(indx in 1:length(stk_data_filtered)){
     dir.create(paste0(si.save.path, "/SpatIndData"))
   }  
   save(si, file = paste0(si.save.path, "/SpatIndData/SpatIndData - ", stk.chr, " - ", names(stk_data_filtered[indx]), " - ", names(stk_data_filtered[[indx]][survey]), ".rda"))
-
+  }
+}
+```
+```{r}
   ### Plot
   message("Plotting spatial indictaor time series...")
   ## Create directory
@@ -463,13 +508,32 @@ for(indx in 1:length(stk_data_filtered)){
     dir.create(paste0(si.save.path, "/SpatIndPlot"))
   } 
     ## convert data frame to long format
-    si_long <- si %>% tidyr::pivot_longer(cols = c("Gini Index", "D95", "Positive Area (Rectangle)", "Positive Area (Haul)", "SPI" ), 
+  si_scaled <- si %>%
+    mutate("Spreading Area" = rescale(`Spreading Area`),
+           "Equivalent Area" = rescale(`Equivalent Area`),
+           "CoG (x)" = rescale(`CoG (x)`),
+           "CoG (y)" = rescale(`CoG (y)`), 
+           "Inertia" = rescale(Inertia),
+           "Ellipse Area" = rescale(`Ellipse Area`),
+           "Convex Hull Area" = rescale(`Convex Hull Area`))
+  
+    si_long <- si %>% tidyr::pivot_longer(cols = c("Gini Index", "D95", "Positive Area (Rectangle)", "Positive Area (Haul)", "SPI", "Spreading Area", "Equivalent Area", "CoG (x)","CoG (y)", "Inertia", "Ellipse Area", "Convex Hull Area", "SSB"), 
                             names_to = "Spatial Indicator",
                             values_to = "Spatial Indicator Value")
-    si_long$`Spatial Indicator` <- factor(si_long$`Spatial Indicator`, levels = c("Gini Index", "D95", "Positive Area (Haul)", "Positive Area (Rectangle)", "SPI")) # factor & relocate
+    si_long$`Spatial Indicator` <- factor(si_long$`Spatial Indicator`, levels = c("Gini Index", "D95", "Positive Area (Haul)", "Positive Area (Rectangle)", "SPI", "Spreading Area", "Equivalent Area", "CoG (x)","CoG (y)", "Inertia", "Ellipse Area", "Convex Hull Area", "SSB")) # factor & relocate
     qrs_text <- paste(as.character(sort(qrs)), collapse = ", ")
-    group_colours <- c(`Gini Index` = 2, D95 = 3, `Positive Area (Haul)` = 4, `Positive Area (Rectangle)` = 5, SPI = 6) # same colours as ROC and TSS
+    group_colours <- c(`Gini Index` = 2, D95 = 3, `Positive Area (Haul)` = 4, `Positive Area (Rectangle)` = 5, SPI = 6, `Spreading Area` = 7, `Equivalent Area` = 8, `CoG (x)` = 9, `CoG (y)` = 10, Inertia = 11, `Ellipse Area` = 12, `Convex hull Area` = 13) # same colours as ROC and TSS
     
+
+    si_facet_plot <- ggplot() + 
+      geom_line(data = si_long, aes(x = Year, y = `Spatial Indicator Value`)) + 
+      facet_wrap(vars(`Spatial Indicator`), scales = "free_y") +
+      labs(title = paste0("Spatial Indicator Time Series for ", stk.chr),
+           subtitle = paste0("Survey Index: ", names(stk_data_filtered[indx]), 
+                             " | Survey: ", names(stk_data_filtered[[indx]][survey]), 
+                             " (", min(yrs), "-", max(yrs), ", Q", qrs_text, ")")) +
+      ylab("Indicator Value")
+    s <- si_facet_plot + geom_line(data = si_long, aes(x = Year, y = `Spatial Indicator Value`))
     ## create the plot
     si_plot <- ggplot() +
       geom_line(data = si_long, aes(x = Year, 
@@ -506,8 +570,8 @@ for(indx in 1:length(stk_data_filtered)){
             panel.grid.minor = element_blank(),
             panel.border = element_rect(colour = "black", fill = NA),
             panel.background = element_blank()) +
-        guides(colour = guide_legend(byrow = TRUE)) + # to enable vertical spacing between key glyphs
-      scale_colour_manual(values = group_colours, guide = "legend") # custom colours matching ROC colours
+        guides(colour = guide_legend(byrow = TRUE)) # to enable vertical spacing between key glyphs
+      #scale_colour_manual(values = group_colours, guide = "legend") # custom colours matching ROC colours
 
     si_plot
     
@@ -516,6 +580,121 @@ for(indx in 1:length(stk_data_filtered)){
     print(noquote("-------------------------------"))
   }
 }
+```
+
+## SDI Plot
+```{r}
+si.stk.path <- paste0("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/10Stock_Outputs/")
+StockFolder <- "ple.27.7d"
+IndexFolder <- "UK-BTS"
+
+
+# Get all SDI data and convert into long format
+sdi_longlist <- list()
+sdi_widelist <- list()
+i <- 1
+for(StockFolder in list.files(si.stk.path)){
+  message(paste0("Stock: ", StockFolder))
+  for(IndexFolder in list.files(paste0(si.stk.path, StockFolder))){
+    message(paste0("Survey Index: ", IndexFolder))
+    for(SurveyFolder in list.files(paste0(si.stk.path, StockFolder, "/", IndexFolder, "/"))){
+      print(noquote(paste0("Survey: ", SurveyFolder)))
+      
+        # Load Spatial Indicator Data
+        si_file <- list.files(paste0(si.stk.path, StockFolder, "/", IndexFolder, "/", SurveyFolder, "/SpatIndData/"), pattern = "*SpatIndData*")
+        load(paste0(si.stk.path, StockFolder, "/", IndexFolder, "/", SurveyFolder, "/SpatIndData/", si_file))
+        #si <- try(si %>% select(-`Equivalent Area (scaled)`, -`Spreading Area (scaled)`, -`SSB`))
+        si$Inertia <- si$Inertia/1000000
+        colnames(si)[colnames(si)=="Inertia"] <- "Inertia (million)"
+        sdi_widelist[[i]] <- si
+        # Convert wide to long
+        si_long <- si %>% tidyr::pivot_longer(cols = c("Gini Index", "D95", "Positive Area (Rectangle)", "Positive Area (Haul)", "SPI", "Spreading Area", "Equivalent Area",
+                                                       "CoG (x)","CoG (y)", "Inertia (million)", "Ellipse Area", "Convex Hull Area"), 
+                          names_to = "Spatial Indicator",
+                          values_to = "Spatial Indicator Value")
+        si_long$`Spatial Indicator` <- factor(si_long$`Spatial Indicator`, levels = c("Gini Index", "D95", "Positive Area (Haul)", "Positive Area (Rectangle)", "SPI", 
+                                                                                      "Spreading Area", "Equivalent Area", "CoG (x)","CoG (y)", "Inertia (million)", 
+                                                                                      "Ellipse Area", "Convex Hull Area")) # factor & relocate
+        sdi_longlist[[i]] <- si_long
+        i <- i + 1
+    }
+  }
+}
+# Merge lists of data
+sdiall_long <- do.call(rbind, sdi_longlist)
+sdiall_wide <- do.call(rbind, sdi_widelist)
+# Create new column for line plot
+sdiall_long$`Survey Index, Survey Name` <- paste0(sdiall_long$SurveyIndex, ", ", sdiall_long$Survey)
+sdiall_wide$`Survey Index, Survey Name` <- paste0(sdiall_wide$SurveyIndex, ", ", sdiall_wide$Survey)
+```
+```{r}
+# Filter to stock of interest
+stk.chr <- "ple.27.7d" # "cod.27.47d20_nov" "had.27.46a20" "ple.27.420" "ple.27.7d" "pok.27.3a46" "sol.27.4" "sol.27.7d" "tur.27.4" "whg.27.47d" "wit.27.3a47d"
+stk <- ple.27.7d
+
+sdistk_long <- filter(sdiall_long, StockID == stk.chr) 
+sdistk_wide <- filter(sdiall_wide, StockID == stk.chr)
+
+# Get SSB for survey years
+strtyr <- min(sdistk_wide$Year)
+endyr <- range(stk)["maxyear"]
+stkssb <- as.data.frame(ssb(stk)[,ac(strtyr:endyr)])[c("year", "data")] %>%
+  rename(Year = year, SSB = data) %>%
+  mutate(type = "SSB")
+
+# Plot SSB
+ssb_plot <- ggplot() + geom_line(data = stkssb, aes(x = Year, y = SSB/1000000), colour = "black") +
+  theme(panel.grid.major = element_line(colour = "grey90"),
+      panel.grid.minor = element_blank(),
+      panel.background = element_blank(),
+      panel.border = element_rect(colour = "black", fill = NA),
+      strip.background = element_rect(colour = "black", fill = "grey20"),
+      strip.text = element_text(colour = "white", face = "bold"), 
+      # Axis
+      axis.text = element_text(size = 8),
+      #axis.text.x = element_text(angle = 90, vjust = 0.3), # rotate & shift right
+      axis.title = element_text(size = 10),
+      aspect.ratio = 1) +
+  ylab("SSB (million tons)") +
+  facet_wrap(vars(`type`))
+
+# Plot SDIs
+sdi_plot1 <- ggplot() + 
+  geom_line(data = sdistk_long, aes(x = Year, y = `Spatial Indicator Value`, colour = `Survey Index, Survey Name`), key_glyph = "rect") + 
+  #geom_smooth(data = sdistk_long, aes(x = Year, y = `Spatial Indicator Value`, colour = `Survey Index, Survey Name`)) + 
+  facet_wrap(vars(`Spatial Indicator`), scales = "free") +
+  labs(title = paste0("Spatial Indicator Time Series (", stk.chr, ")"))+
+  ylab("Indicator Value") + 
+  # Theme
+  theme(
+    # Panels
+    panel.grid.major = element_line(colour = "grey90"),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(),
+    panel.border = element_rect(colour = "black", fill = NA),
+    strip.background = element_rect(colour = "black"),
+    # Legend
+    #legend.justification = "top",
+    legend.position = "right",
+    legend.key = element_rect(colour="black", linewidth = 0.5), # border around glyphs
+    legend.key.width = unit(0.3, "cm"),
+    legend.key.height = unit(0.3, "cm"),
+    legend.spacing.y = unit(0.3, "cm"), # distance between each key glyph
+    #legend.position = c(1.164,.69),
+    #legend.background = element_rect(colour = "black"),
+    # Axis
+    axis.text = element_text(size = 8),
+    #axis.text.x = element_text(angle = 90, vjust = 0.3), # rotate & shift right
+    axis.title = element_text(size = 10),
+    aspect.ratio = 1,
+    plot.margin = unit(c(0.5,2,0.5,0.5), "cm")
+    ) +
+  guides(colour = guide_legend(byrow = TRUE)) # to enable vertical spacing between key glyphs
+
+# Overlay SSB plot SDI plot
+sdissb_plot <- ggdraw()+ draw_plot(sdi_plot1)+ draw_plot(ssb_plot, x= .76, y= 0.2977, width=.206, height = .206)
+# Save
+cowplot::save_plot(plot = sdissb_plot, filename = paste0(si.stk.path, "SpatIndPlot-", stk.chr, ".png"), base_height = 25, base_width = 12)
 ```
 
 ## ROC Curve and TSS Plot
