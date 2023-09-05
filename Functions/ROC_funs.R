@@ -144,10 +144,11 @@ roc_fun3 <- function(all_data, state, inds, return = "long"){
     roc2$ind <- all_data[ind]
     roc2$status <- as.vector(roc2$state >= 1)
     roc2 <- arrange(roc2, ind)
+    roc2 <- roc2[!is.na(roc2$ind),] # remove rows with NAs in the spat ind (usually from where the ere wasnt data to calucate the index)
     
-    if(length(unique(roc$status)) < 2){
+    if(length(unique(roc2$status)) < 2){
       warning(paste0("\nIn all the survey years, the true status of the stock from stock assessments is ", 
-                     unique(roc$status),
+                     unique(roc2$status),
                      ".\n There needs to be contrast in status of the stock for ROC to be computed"), immediate. = TRUE)}
     
     # calculate ROC stats
@@ -179,6 +180,7 @@ roc_fun3 <- function(all_data, state, inds, return = "long"){
                                             names_to = "Spatial Indicator",
                                             values_to = "Spatial Indicator Value")
     roc_long$`Spatial Indicator` <- ind
+    #roc_long$`Spatial Indicator Value`[roc_long$Year==998,]
     roc_long <- as.data.table(roc_long)
     roc_longlist[[i]] <- roc_long
   }
