@@ -156,8 +156,8 @@ stk_divs2 <- allstk_metadata %>% filter(
 stk_divs <- strsplit(as.character(stk_divs2), split = ", ")[[1]]
 rm(stk_divs2)
 
-print(paste0("ICES Divisions for ", species$spcs_name, " (", stk.chr, ") :"))
-print(stk_divs)
+writeLines(paste0("ICES Divisions for ", species$spcs_name, " (", stk.chr, ") : ", paste0(stk_divs, collapse = ", ")))
+
 
 ### check stk_divs are in the ices_rect and ices_divs
 stk_divs %in% ices_rect$Area_27
