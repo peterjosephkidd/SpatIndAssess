@@ -1,6 +1,6 @@
 #> Calculate Spatial Indicators
 #> Loop through all stocks at once
-#> 
+
 ### A. Load in requirements ####
 # load packages
 pckgs <- c("FLCore", "FLBRP", "dplyr", "ggplot2", "ggplotFL", "rgdal", 
@@ -62,8 +62,7 @@ for(i in 1:length(stocklist)){
   stk_divs <- strsplit(as.character(stk_divs2), split = ", ")[[1]]
   rm(stk_divs2)
   # Print selection
-  print(paste0("ICES Divisions for ", species$spcs_name, " (", stk.chr, ") :"))
-  print(stk_divs)
+  writeLines(paste0("ICES Divisions for ", species$spcs_name, " (", stk.chr, ") : ", paste0(stk_divs, collapse = ", ")))
   # check stk_divs are in the ices_rect and ices_divs
   stk_divs %in% ices_rect$Area_27
   stk_divs %in% ices_divs$Area_27
@@ -200,11 +199,12 @@ for(i in 1:length(stocklist)){
   #### 2. Calculate Spatial Indicators ####
   # Output path to save data and plots
   # Keeping this to my one drive, files may be too large for GitHub
-  si.data.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/10Stock_Outputs/"
   
   ##### 2.1 Start Loop ####
   for(indx in 1:length(stk_data_filtered)){
     for(survey in 1:length(stk_data_filtered[[indx]])){
+      si.data.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/10Stock_Outputs/"
+      
       # get survey name within this survey index
       message("---------------------------\n", names(stk_data_filtered[indx]))
       writeLines(noquote(paste0("Survey Index:       ", names(stk_data_filtered[indx]))))
@@ -338,7 +338,8 @@ for(i in 1:length(stocklist)){
       cog <- cog
       cha <- cha[c("Year", "Quarter", "areaoccupied")]
       ## merge
-      si <- Reduce(function(x, y) merge(x, y, by = c("Year", "Quarter")), list(Gini.index, D95, np.hauls, np.rects, SPI, sa, ea, cog, cha))
+      si <- Reduce(function(x, y) full_join(x, y, by = c("Year", "Quarter")), list(Gini.index, D95, np.hauls, np.rects, SPI, sa, ea, cog, cha)) 
+      # `full_join` keeps rows where certain spatinds could not be calculated but others are available. `merge` removes these rows
       ## rename some columns
       si <- si %>%
         rename("Positive Area (Haul)" = PosAreaH,
@@ -352,9 +353,6 @@ for(i in 1:length(stocklist)){
                Survey = names(stk_data_filtered[[indx]][survey]),
                StockID = stk.chr) %>%
         relocate(StockID, SurveyIndex, Survey, Year, Quarter, `Gini Index`) #, D95, `Positive Area (Haul)`, `Positive Area (Rectangle)`, SPI) these might also have to be ordered to match roc order
-      # Gini must be the first spat ind column for the roc and tss funs
-      
-      
       ##### 3.1 Save Data ####
       ## Create directories
       if(dir.exists(paste0(si.data.path, stk.chr)) == FALSE){
@@ -367,6 +365,7 @@ for(i in 1:length(stocklist)){
         dir.create(paste0(si.data.path, stk.chr, "/", names(stk_data_filtered[indx]), "/", names(stk_data_filtered[[indx]][survey])))
       }
       si.data.path <- paste0(si.data.path, stk.chr, "/", names(stk_data_filtered[indx]), "/", names(stk_data_filtered[[indx]][survey]))
+      print(si.data.path)
       
       if(dir.exists(paste0(si.data.path, "/SpatIndData")) == FALSE){
         dir.create(paste0(si.data.path, "/SpatIndData"))
@@ -399,13 +398,13 @@ for(StockFolder in list.files(si.data.path)){
       colnames(si)[colnames(si)=="Inertia"] <- "Inertia (million)"
       sdi_widelist[[i]] <- si
       #  Convert wide to long 
-      si_long <- si %>% tidyr::pivot_longer(cols = c("Gini Index", "D95", "Positive Area (Rectangle)", "Positive Area (Haul)", "SPI", "Spreading Area", "Equivalent Area",
-                                                     "CoG (x)","CoG (y)", "Inertia (million)", "Ellipse Area", "Convex Hull Area"), 
+      si_long <- si %>% tidyr::pivot_longer(cols = sort(c("Gini Index", "D95", "Positive Area (Rectangle)", "Positive Area (Haul)", "SPI", "Spreading Area", "Equivalent Area",
+                                                     "CoG (x)","CoG (y)", "Inertia (million)", "Ellipse Area", "Convex Hull Area")), 
                                             names_to = "Spatial Indicator",
                                             values_to = "Spatial Indicator Value")
-      si_long$`Spatial Indicator` <- factor(si_long$`Spatial Indicator`, levels = c("Gini Index", "D95", "Positive Area (Haul)", "Positive Area (Rectangle)", "SPI", 
+      si_long$`Spatial Indicator` <- factor(si_long$`Spatial Indicator`, levels = sort(c("Gini Index", "D95", "Positive Area (Haul)", "Positive Area (Rectangle)", "SPI", 
                                                                                     "Spreading Area", "Equivalent Area", "CoG (x)","CoG (y)", "Inertia (million)", 
-                                                                                    "Ellipse Area", "Convex Hull Area")) # factor & relocate
+                                                                                    "Ellipse Area", "Convex Hull Area"))) # factor & relocate
       sdi_longlist[[i]] <- si_long
       i <- i + 1
     }
@@ -492,14 +491,11 @@ for(i in 1:length(stocklist)){
       panel.border = element_rect(colour = "black", fill = NA),
       strip.background = element_rect(colour = "black"),
       # Legend
-      #legend.justification = "top",
       legend.position = "right",
       legend.key = element_rect(colour="black", linewidth = 0.5), # border around glyphs
       legend.key.width = unit(0.3, "cm"),
       legend.key.height = unit(0.3, "cm"),
       legend.spacing.y = unit(0.3, "cm"), # distance between each key glyph
-      #legend.position = c(1.164,.69),
-      #legend.background = element_rect(colour = "black"),
       # Axis
       axis.text = element_text(size = 8),
       #axis.text.x = element_text(angle = 90, vjust = 0.3), # rotate & shift right
@@ -539,7 +535,6 @@ for(i in 1:length(stocklist)){
                  paste0(c(rep("#", times = stringr::str_count(stk.chr)+4)), collapse = ""),"\n# ", 
                  stk.chr, " #", "\n",
                  paste0(c(rep("#", times = stringr::str_count(stk.chr)+4)), collapse = "")))
-  
   writeLines("Filter SI data to stock")
   # Filter data from section C to specific stock
   sdistk_long <- filter(sdiall_long, StockID == stk.chr) 
@@ -728,7 +723,7 @@ auc_df$sig <- ifelse(auc_df$AUC >= 0.75, "*", NA)
 
 lablist <- list()
 for(i in 1:length(unique(auc_df$names))){
-  test <- unique(auc_df$names)[i]
+  test <- sort(unique(auc_df$names))[i]
   split <- strsplit(test, " ")[[1]]
   k <- strsplit(test, " ")[[1]][2:length(split)]
   lab <- paste(k, collapse = " ")
@@ -751,8 +746,7 @@ AUC_plot <- ggplot() +
   facet_wrap(vars(`Spatial Indicator`)) +
   xlab("Survey Index, Survey Name") +
   ylab("Area Under ROC Curve") +
-  coord_cartesian(ylim = c(0,1.1)) +
-  scale_y_continuous(breaks = seq(0,1, 0.2), expand = c(0,0)) + 
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) + 
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size = 6),
         # Panels
         panel.grid.major.y = element_line(colour = "grey90"),
@@ -763,10 +757,6 @@ AUC_plot <- ggplot() +
         strip.background = element_rect(colour = "black"),
         # Legend
         legend.position = "right")
-        #legend.key = element_rect(colour="black", linewidth = 0.5), # border around glyphs
-        #legend.key.width = unit(0.3, "cm"),
-        #legend.key.height = unit(0.3, "cm"))
-        #legend.spacing.y = unit(0.3, "cm"))
   
 #### 5. Save AUC Plot #### 
 cowplot::save_plot(plot = AUC_plot, filename = paste0(auc.plot.path, "aucPlot.png"), base_height = 8, base_width = 12)
@@ -776,17 +766,22 @@ roc.data.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spat
 tssSum.plot.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/ROC/TSSsummary_plot/"
 
 tssSum_df <- data.frame()
+tssSum_df2 <- data.frame()
+
+#### 2. Get TSS #### 
 for(i in 1:length(list.files(roc.data.path))){
   load(paste0(roc.data.path, list.files(roc.data.path)[i])) # loads as rocAll_long
   stk.chr <- unique(rocAll_long$StockID)
   rocAll_long$`Spatial Indicator Value` <- as.numeric(rocAll_long$`Spatial Indicator Value`)
+  tssSum_df2 <- rbind(tssSum_df2, rocAll_long)
   for(j in unique(rocAll_long$`Survey Index, Survey Name`)){
     rocSpcs_long <- filter(rocAll_long, `Survey Index, Survey Name` == j)
     for(w in unique(rocAll_long$`Spatial Indicator`)){
-      #### 2. Get TSS #### 
-      rocSpcsIndx_long <- filter(rocSpcs_long, `Spatial Indicator` == w)
-      rocSpcsIndx_long <- filter(rocSpcsIndx_long, TSS == max(TSS))
+      rocSpcsIndx <- filter(rocSpcs_long, `Spatial Indicator` == w)
+      rocSpcsIndx_long <- filter(rocSpcsIndx, is.na(TSS) == F) %>%
+        filter(TSS == max(TSS))
       tssSum_df <- rbind(tssSum_df, rocSpcsIndx_long)
+
     }
   }
 }
@@ -798,13 +793,12 @@ tssSum_df$sig <- ifelse(tssSum_df$TSS >= 0.5, "*", NA)
 
 lablist <- list()
 for(i in 1:length(unique(tssSum_df$names))){
-  test <- unique(tssSum_df$names)[i]
+  test <- sort(unique(tssSum_df$names))[i] # sorting alphabetically puts in same order that ggplot plots data
   split <- strsplit(test, " ")[[1]]
   k <- strsplit(test, " ")[[1]][2:length(split)]
   lab <- paste(k, collapse = " ")
   lablist[i] <- lab
 }
-
 labels <- unlist(lablist)
   
 #### 4. Save TSS Summary Data ####
@@ -822,8 +816,7 @@ tssSum_plot <- ggplot() +
   facet_wrap(vars(`Spatial Indicator`)) +
   xlab("Survey Index, Survey Name") +
   ylab("True Skill Score of Optimised Threshold") +
-  coord_cartesian(ylim = c(0,1.1)) +
-  scale_y_continuous(breaks = seq(0,1, 0.2), expand = c(0,0)) + 
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) + 
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size = 6),
         # Panels
         panel.grid.major.y = element_line(colour = "grey90"),
@@ -834,28 +827,270 @@ tssSum_plot <- ggplot() +
         strip.background = element_rect(colour = "black"),
         # Legend
         legend.position = "right")
-        #legend.key = element_rect(colour="black", linewidth = 0.5), # border around glyphs
-        #legend.key.width = unit(0.3, "cm"),
-        #legend.key.height = unit(0.3, "cm"))
-        #legend.spacing.y = unit(0.3, "cm"))
   
-#### 5. Save TSS Summary Plot #### 
+#### 6. Save TSS Summary Plot #### 
 cowplot::save_plot(plot = tssSum_plot, filename = paste0(tssSum.plot.path, "tssSumPlot.png"), base_height = 8, base_width = 12)
 
+#### 7. Alternative TSS Summary Plots ####
+tssSum_df2$names <- paste(tssSum_df2$StockID, tssSum_df2$`Survey Index, Survey Name`)
+tssSum_df2$rand <- ifelse(tssSum_df2$TSS > 0, "TRUE", "FALSE")
+tssSum_df2$sig <- ifelse(tssSum_df2$TSS >= 0.5, "*", NA)
 
+tssSum_df3 <- tssSum_df2 %>%
+  group_by(StockID, `Survey Index, Survey Name`, `Spatial Indicator`, names) %>%
+  summarise(y0 = min(TSS),
+            y25 = quantile(TSS, 0.25, na.rm = T),
+            y50 = median(TSS),
+            y75 = quantile(TSS, 0.75, na.rm = T),
+            y100 = max(TSS))
 
+tssSum_plot2 <- ggplot() +
+  geom_errorbar(data = tssSum_df3, aes(x = names, ymin = y0, ymax = y100), colour = "black", width = 0.5, key_glyph = "rect") +
+  geom_boxplot(data = tssSum_df3, aes(x = names, ymin = y0, ymax = y100, lower = y25, upper = y75, middle = y50, fill = StockID),colour = "grey20", stat="identity", key_glyph = "rect") +
+  facet_wrap(vars(`Spatial Indicator`)) +
+  scale_x_discrete(labels = labels) +
+  geom_hline(yintercept = 0, colour = "grey20", lty = 2) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) + 
+  xlab("Survey Index, Survey Name") +
+  ylab("True Skill Score (TSS)") +
+  # Theme
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size = 6),
+    # Legend
+    legend.position = "right",
+    legend.key = element_rect(colour="black", linewidth = 0.5), # border around glyphs
+    legend.key.width = unit(0.3, "cm"),
+    legend.key.height = unit(0.3, "cm"),
+    legend.spacing.y = unit(0.3, "cm"), # distance between each key glyph
+    # Panels
+    panel.grid.major.y = element_line(colour = "grey90"),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(),
+    panel.border = element_rect(colour = "black", fill = NA),
+    strip.background = element_rect(colour = "black")
+  ) +
+  guides(fill = guide_legend(byrow = TRUE, title = "Stock ID")) # to enable vertical spacing between key glyphs
+cowplot::save_plot(plot = tssSum_plot2, filename = paste0(tssSum.plot.path, "tssSumPlot2.png"), base_height = 8, base_width = 12)
 
-# ROC computed for all spat inds?
+tssSum_plot3 <- ggplot() +
+  geom_errorbar(data = tssSum_df3, aes(x = names, ymin = y0, ymax = y100, colour = StockID), width = 0.9, key_glyph = "rect", linewidth = 0.5) +
+  facet_wrap(vars(`Spatial Indicator`)) +
+  scale_x_discrete(labels = labels) +
+  geom_hline(yintercept = 0, colour = "grey20", lty = 2) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) + 
+  xlab("Survey Index, Survey Name") +
+  ylab("True Skill Score (TSS)") +
+  # Theme
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size = 6),
+    # Legend
+    legend.position = "right",
+    legend.key = element_rect(colour="black", linewidth = 0.5), # border around glyphs
+    legend.key.width = unit(0.3, "cm"),
+    legend.key.height = unit(0.3, "cm"),
+    legend.spacing.y = unit(0.3, "cm"), # distance between each key glyph
+    # Panels
+    panel.grid.major.y = element_line(colour = "grey90"),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(),
+    panel.border = element_rect(colour = "black", fill = NA),
+    strip.background = element_rect(colour = "black")
+  ) +
+  guides(colour = guide_legend(byrow = TRUE, title = "Stock ID")) # to enable vertical spacing between key glyphs
+cowplot::save_plot(plot = tssSum_plot3, filename = paste0(tssSum.plot.path, "tssSumPlot3.png"), base_height = 8, base_width = 12)
+
   
-  ggplot() +
-    geom_path(data = rocAll_long, aes(x = FPR, y = TPR, colour = `Survey Index, Survey Name`), key_glyph = "rect")+
-    geom_abline(slope = c(0,1)) +
-    facet_wrap(vars(`Spatial Indicator`)) +
+        
+  
+  
+  #scale_alpha_discrete(range = c(0.5, 1)) +
+  #guides(alpha = "none") +
+  #scale_colour_identity() +
+  #geom_text(data = tssSum_df, aes(x = names, y = TSS, label = sig), vjust = -.0001) +
+  scale_x_discrete(labels = labels) +
+  geom_hline(yintercept = 0, colour = "grey20", lty = 2) +
+  facet_wrap(vars(`Spatial Indicator`)) +
+  xlab("Survey Index, Survey Name") +
+  ylab("True Skill Score of Optimised Threshold") +
+  #coord_cartesian(ylim = c(-1,1.1)) +
+  #scale_y_continuous(breaks = seq(-1,1, 0.2), expand = c(0,0)) + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size = 6),
+        # Panels
+        panel.grid.major.y = element_line(colour = "grey90"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        panel.border = element_rect(colour = "black", fill = NA),
+        strip.background = element_rect(colour = "black"),
+        # Legend
+        legend.position = "right")
+
+### I. Plot Spatial Indicators with Optimal Threshold ####
+#### 1. Load and Prepare Data ####
+# Get all SDI data and convert into long format
+si.data.path <- paste0("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/10Stock_Outputs/")
+si.plot.path <- paste0("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/SpatIndPlots/")
+sdi_longlist <- list()
+sdi_widelist <- list()
+i <- 1
+
+for(StockFolder in list.files(si.data.path)){
+  message(paste0("Stock: ", StockFolder))
+  for(IndexFolder in list.files(paste0(si.data.path, StockFolder))){
+    message(paste0("Survey Index: ", IndexFolder))
+    for(SurveyFolder in list.files(paste0(si.data.path, StockFolder, "/", IndexFolder, "/"))){
+      print(noquote(paste0("Survey: ", SurveyFolder)))
+      #Load  Data
+      si_file <- list.files(paste0(si.data.path, StockFolder, "/", IndexFolder, "/", SurveyFolder, "/SpatIndData/"), pattern = "*SpatIndData*")
+      load(paste0(si.data.path, StockFolder, "/", IndexFolder, "/", SurveyFolder, "/SpatIndData/", si_file))
+      si$Inertia <- si$Inertia/1000000
+      colnames(si)[colnames(si)=="Inertia"] <- "Inertia (million)"
+      sdi_widelist[[i]] <- si
+      #  Convert wide to long 
+      si_long <- si %>% tidyr::pivot_longer(cols = sort(c("Gini Index", "D95", "Positive Area (Rectangle)", "Positive Area (Haul)", "SPI", "Spreading Area", "Equivalent Area",
+                                                     "CoG (x)","CoG (y)", "Inertia (million)", "Ellipse Area", "Convex Hull Area")), 
+                                            names_to = "Spatial Indicator",
+                                            values_to = "Spatial Indicator Value")
+      si_long$`Spatial Indicator` <- factor(si_long$`Spatial Indicator`, levels = sort(c("Gini Index", "D95", "Positive Area (Haul)", "Positive Area (Rectangle)", "SPI", 
+                                                                                    "Spreading Area", "Equivalent Area", "CoG (x)","CoG (y)", "Inertia (million)", 
+                                                                                    "Ellipse Area", "Convex Hull Area"))) # factor & relocate
+      sdi_longlist[[i]] <- si_long
+      i <- i + 1
+    }
+  }
+}
+
+##### 1.1 Merge Data ####
+sdiall_long <- do.call(rbind, sdi_longlist)
+sdiall_wide <- do.call(rbind, sdi_widelist)
+# Create new column for line plot
+sdiall_long$`Survey Index, Survey Name` <- paste0(sdiall_long$SurveyIndex, ", ", sdiall_long$Survey)
+sdiall_wide$`Survey Index, Survey Name` <- paste0(sdiall_wide$SurveyIndex, ", ", sdiall_wide$Survey)
+
+##### 1.2 Add Optimum Threshold ####
+# Load data from section H
+tssSum.plot.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/ROC/TSSsummary_plot/"
+# All columns of data where TSS is maximised 
+load(file = paste0(tssSum.plot.path, "tssSum_longdata.rda")) # tssSum_df 
+# Get the spat ind value where TSS was maximised 
+optthreshdata <- tssSum_df %>%
+  select(Year, StockID, SurveyIndex, Survey, `Survey Index, Survey Name`, `Spatial Indicator`, `Spatial Indicator Value`, `TSS`) %>%
+  rename("OptThresh" = `Spatial Indicator Value`, "MaxTSS" = TSS, "OptYear" = Year) %>%
+  filter(OptYear != 998)
+# There should be no duplicates in this check:
+if(any(duplicated(optthreshdata[2:6]))){
+  duprowno <- unique(sort(c(which(duplicated(optthreshdata[2:6])), which(duplicated(optthreshdata[2:6]))-1)))
+  duprows <- optthreshdata[duprowno,] %>%
+    rename("Year" = OptYear, "Spatial Indicator Value" = OptThresh, "TSS" = MaxTSS) %>%
+    mutate(Duplicate = "TRUE")
+  tssdup <- merge(tssSum_df, duprows, by = c("Year", "StockID", "SurveyIndex", "Survey", "Survey Index, Survey Name", "Spatial Indicator", "Spatial Indicator Value", "TSS"))
+  duprows <- tssdup[tssdup$Duplicate == "TRUE",] %>% 
+    arrange(StockID, `Survey Index, Survey Name`, `Spatial Indicator`) %>%
+    group_by(StockID, `Survey Index, Survey Name`, `Spatial Indicator`) %>%
+    mutate(maxTNR = if_else(TNR == max(TNR), "TRUE", "FALSE")) %>%
+    relocate(maxTNR) %>%
+    select(maxTNR, Year, StockID, SurveyIndex, Survey, `Survey Index, Survey Name`, `Spatial Indicator`, `Spatial Indicator Value`, TSS) %>%
+    rename("OptYear" = Year, "OptThresh" = `Spatial Indicator Value`, "MaxTSS" = TSS)
+  optthreshdata <- full_join(optthreshdata, duprows, by = c("OptYear", "StockID", "SurveyIndex", "Survey", "Survey Index, Survey Name", "Spatial Indicator", "OptThresh", "MaxTSS")) %>%
+    mutate(maxTNR = if_else(is.na(maxTNR), "ignore", maxTNR)) %>%
+    filter(maxTNR != "FALSE") %>%
+    select(-maxTNR)
+}
+# check again
+if(any(duplicated(optthreshdata[2:6]))){print("Still not okay")}
+
+#> We have duplicates when multiple spatial indicator threshold values, give the
+#> same TSS, which also happens to be the max TSS. So there are multiple points
+#> where the TSS is maximized. How do we decide which threshold to choose?
+#> The TSS is the sum of the true positive rate and the true negative rate.
+#> We could select the threshold by looking at these individual values. It may 
+#> be more important to us to correctly identify when the stock is in a negative
+#> state as rather than when it is healthy. Therefore we would select the 
+#> threshold with the highest TNR. If the TNR and TPR are also identical, then 
+#> we could decide on which threshold to use by looking at the TSS of the 
+#> neighboring thresholds. If the neighboring thresholds have only a slightly
+#> lower TSS, then this is better than having neighboring thresholds that have 
+#> very low or negative TSS. 
+
+# Merge with spat ind data and divde spat inds by the optimal threshold
+# No everything above 1 = healthy, below 1 = unhealthy
+sdiall_Stndrd <- merge(sdiall_long, optthreshdata, by = c("StockID", "SurveyIndex", "Survey", "Survey Index, Survey Name", "Spatial Indicator"))
+sdiall_Stndrd$`Spatial Indicator Value/OptThresh` <- sdiall_Stndrd$`Spatial Indicator Value`/sdiall_Stndrd$OptThresh
+
+#### 2. Load Stock Objects ####
+stockobj.path <- paste0(getwd(), "/Data/DR_Stocks/Stock Objects/2022/")
+# Put into a lsit to iterate through later
+for(stockfile in list.files(stockobj.path)){load(paste0(stockobj.path, stockfile))}
+stocklist <- list(cod.27.47d20_nov, had.27.46a20, ple.27.420, ple.27.7d, 
+                  pok.27.3a46, sol.27.4, tur.27.4, whg.27.47d, wit.27.3a47d) # ignore so.27.7d for now, need to find YFS survey data
+# Order here must match order in stocklist
+stocklist.chr <- list("cod.27.47d20_nov", "had.27.46a20", "ple.27.420", "ple.27.7d", 
+                      "pok.27.3a46", "sol.27.4", "tur.27.4", "whg.27.47d", "wit.27.3a47d") # ignore so.27.7d for now, need to find YFS survey data
+
+#### 3. Plot ####
+for(i in 1:length(stocklist)){
+  ##### 3.1 Filter to Stock ####
+  # Select the stock to analyse
+  stk <- stocklist[[i]]
+  stk.chr <- stocklist.chr[[i]]
+  message(paste0("\n",
+                 paste0(c(rep("#", times = stringr::str_count(stk.chr)+4)), collapse = ""),"\n# ", 
+                 stk.chr, " #", "\n",
+                 paste0(c(rep("#", times = stringr::str_count(stk.chr)+4)), collapse = "")))
+  
+  writeLines("Filter SI data to stock")
+  sdistk_long <- filter(sdiall_long, StockID == stk.chr) 
+  sdistk_wide <- filter(sdiall_wide, StockID == stk.chr)
+  sdistk_stndrd <-filter(sdiall_Stndrd, StockID == stk.chr)
+  
+  #### 3.2 Get SSB/MSY Btrigger ####
+  writeLines("Get SSB for survey years")
+  
+  strtyr <- min(sdistk_wide$Year)
+  if(strtyr < range(stk)["minyear"]){
+    warning("First year of survey data provided preceeds first year of data in the stock object. Using minyear of the stock object instead.", immediate. = TRUE)
+    strtyr <- range(stk)["minyear"]}
+  
+  endyr <- max(sdistk_wide$Year)
+  if(endyr > range(stk)["maxyear"]){
+    warning("Last year of survey data provided exceeds available last year of data in the stock object. Using maxyear of the stock object instead.", immediate. = TRUE)
+    endyr <- range(stk)["maxyear"]}  
+  
+  writeLines("Add SSB to dataframe")
+  msybtrig_refpt <- allstk_refpts$MSY_Btrigger[allstk_refpts$stk_name == stk.chr]
+  stkssb <- as.data.frame(ssb(stk)[,ac(strtyr:endyr)])[c("year", "data")] %>%
+    rename(Year = year, SSB = data) %>%
+    mutate(type = "SSB")
+  stkssb$ssb.msybtrig <- stkssb$SSB/msybtrig_refpt
+  
+  #### 3.2 Plot SSB/MSY Btrigger ####
+  writeLines("Plot SSB")
+  ssb_plot <- ggplot() + geom_line(data = stkssb, aes(x = Year, y = ssb.msybtrig), colour = "black") +
+    geom_hline(yintercept = 1, colour = "grey20", lty = 2) +
+    theme(panel.grid.major = element_line(colour = "grey90"),
+          panel.grid.minor = element_blank(),
+          panel.background = element_blank(),
+          panel.border = element_rect(colour = "black", fill = NA),
+          strip.background = element_rect(colour = "black", fill = "grey20"),
+          strip.text = element_text(colour = "white", face = "bold"), 
+          # Axis
+          axis.text = element_text(size = 8),
+          #axis.text.x = element_text(angle = 90, vjust = 0.3), # rotate & shift right
+          axis.title = element_text(size = 10),
+          aspect.ratio = 1) +
+    ylab("SSB/MSY Btrigger") +
+    facet_wrap(vars(`type`))
+  
+  #### 3.3 Plot SIs with OptThresh####
+  writeLines("Plot Spatial Indicators with Optimal Threshold")
+  optthresh_plot2 <- ggplot() + 
+    geom_line(data = sdistk_stndrd, aes(x = Year, y = `Spatial Indicator Value/OptThresh`, colour = `Survey Index, Survey Name`), key_glyph = "rect") + 
+    geom_hline(yintercept = 1, colour = "grey20", lty = 2) +
+    facet_wrap(vars(`Spatial Indicator`), scales = "free") +
     labs(title = paste0("Spatial Indicator Time Series (", stk.chr, ")"))+
-    ylab("True Positive Rate") + 
-    xlab("False Positive Rate") +
-    scale_y_continuous(breaks = seq(0, 1, 0.2)) +
-    scale_x_continuous(breaks = seq(0, 1, 0.2)) +
+    ylab("Indicator Value") + 
     # Theme
     theme(
       # Panels
@@ -878,8 +1113,14 @@ cowplot::save_plot(plot = tssSum_plot, filename = paste0(tssSum.plot.path, "tssS
       #axis.text.x = element_text(angle = 90, vjust = 0.3), # rotate & shift right
       axis.title = element_text(size = 10),
       aspect.ratio = 1,
-      #plot.margin = unit(c(0.5,2,0.5,0.5), "cm")
+      plot.margin = unit(c(0.5,2,0.5,0.5), "cm")
     ) +
     guides(colour = guide_legend(byrow = TRUE)) # to enable vertical spacing between key glyphs
-
   
+  #### 3.4 Overlay SSB & SDI ####
+  writeLines("Plot layout")
+  optthresh_plot <- ggdraw()+ draw_plot(optthresh_plot2)+ draw_plot(ssb_plot, x= .76, y= 0.2977, width=.206, height = .206)
+  ### 4. Save ####
+  writeLines("Save")
+  cowplot::save_plot(plot = optthresh_plot, filename = paste0(si.plot.path, "OptSpatIndPlot-", stk.chr, ".png"), base_height = 25, base_width = 12)
+}
