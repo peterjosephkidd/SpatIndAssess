@@ -699,7 +699,7 @@ coginert <- function(hlhh, yrs, qrs, species_aphia, stk_divs){
     cg_x <- mean(longitude)
     cg_y <- mean(latitude)
     ### Inertia
-    inertia <- sum(abs(longitude)-cg_x)^2 + sum(abs(latitude)-cg_y)^2
+    inertia <- sum(abs(longitude) -cg_x)^2 + sum(abs(latitude)-cg_y)^2
     ### Area of Inertia
     # Create a 2x2 covariance matrix
     cov_matrix <- cov(cbind(longitude, latitude))
