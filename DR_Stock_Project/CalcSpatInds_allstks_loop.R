@@ -385,7 +385,7 @@ sdi_longlist <- list()
 sdi_widelist <- list()
 i <- 1
 
-for(StockFolder in list.files(si.data.path)){
+for(StockFolder in stocklist.chr){
   message(paste0("Stock: ", StockFolder))
   for(IndexFolder in list.files(paste0(si.data.path, StockFolder))){
     message(paste0("Survey Index: ", IndexFolder))
