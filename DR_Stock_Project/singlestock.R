@@ -1,7 +1,8 @@
 # Single stock run through of full analysis
 # 1. Prep ####
+rm(list = ls())
 # install FLR:
-source("http://flr-project.org/R/instFLR.R")
+#source("http://flr-project.org/R/instFLR.R")
 # load packages
 pckgs <- c("FLCore", "FLBRP", "ggplotFL", "dplyr", "ggplot2", "rgdal", 
            "DataExplorer", "rgeos", "sf", "mapplots", "maptools", "mapproj", 
@@ -193,7 +194,53 @@ for(indx in 1:length(stk_data_filtered)){
   }
 }
 
+# Plotting params ####
+## Set type ####
 type <- "AllSurveys" # name added to signify filter for best surveys
+
+## Order surveys by coverage ####
+# Calculate the number of rectangles within the stock boundary
+# use ICES shapefiles and stk_divs from earlier
+totrec <- ices_rect %>% 
+  filter(Area_27 %in% stk_divs) %>%
+  summarise(N = length(unique(ICESNAME)))
+
+# the data for each survey is stored in `stk_data_filtered`
+# calculate the number of rectangles surveyed in the stock boundary for each survey
+meanrects <- data.frame()
+for(SurveyFolder in 1:length(stk_data_filtered)){
+  for(IndexFolder in 1:length((stk_data_filtered[[SurveyFolder]]))){
+    survrec <- stk_data_filtered[[SurveyFolder]][[IndexFolder]]$hlhh %>%
+      filter(Area_27 %in% stk_divs) %>%
+      group_by(Year) %>%
+      summarise(ny = length(unique(StatRec)))
+    n <- mean(survrec$ny)
+    output <- c(stk.chr, 
+                paste0(stk_divs, collapse = ", "), 
+                min(stk_data_filtered[[SurveyFolder]][[IndexFolder]]$hlhh$Year),
+                max(stk_data_filtered[[SurveyFolder]][[IndexFolder]]$hlhh$Year),
+                names(stk_data_filtered[SurveyFolder]), 
+                names(stk_data_filtered[[SurveyFolder]][IndexFolder]), 
+                n)
+    meanrects <- rbind(meanrects, output)
+  }
+}
+colnames(meanrects) <- c("StockID", "StkDivs", "YrStrt", "YrEnd", "SurveyIndex", "SurveyName", "MeanRects")
+meanrects$MeanRects <- as.numeric(meanrects$MeanRects)
+meanrects$TotalRects <- totrec$N
+meanrects$SurvCoverage <- round((meanrects$MeanRects/meanrects$TotalRects)*100, 2)
+meanrects$`Survey Index, Survey Name` <- paste0(meanrects$SurveyIndex, ", ", meanrects$SurveyName)
+survorder <- arrange(meanrects, desc(SurvCoverage))$`Survey Index, Survey Name`
+
+
+## Colours for consistency ####
+library(RColorBrewer)
+library(paletteer)
+
+colrs <- c("blue4", "#00695C", "#8BC34A", "gold2", "#E78100FF", "#F5191CFF", "#9C27B0") # "#FFD320", 
+#colrs <- paletteer_c("grDevices::Zissou 1", 6)
+#colrs <- paletteer_c("ggthemes::Temperature Diverging", 6)
+names(colrs) <- survorder
 
 # 3. Calculate Spatial Indicators ####
 # Output path to save data and plots
@@ -372,6 +419,12 @@ for(indx in 1:length(stk_data_filtered)){
 }
 
 # 4. Plot Spatial Indicators ####
+## Consistent colours ####
+if(type == "BestSurveys"){
+  b <- paste0(bestsurveys$SurveyIndex, ", ", bestsurveys$SurveyName)
+  colrs <- colrs[b]
+}
+
 ## 4.1 Load and Prepare Data ####
 # Get SDI data and convert into long format
 si.data.path <- paste0("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/1. Outputs/Data/SpatInd/", type, "/", stk.chr, "/")
@@ -410,60 +463,6 @@ sdistk_wide <- do.call(rbind, sdi_widelist)
 # Create new column for line plot
 sdistk_long$`Survey Index, Survey Name` <- paste0(sdistk_long$SurveyIndex, ", ", sdistk_long$Survey)
 sdistk_wide$`Survey Index, Survey Name` <- paste0(sdistk_wide$SurveyIndex, ", ", sdistk_wide$Survey)
-
-### Order surveys by coverage ####
-# Calculate the number of rectangles within the stock boundary
-# use ICES shapefiles and stk_divs from earlier
-totrec <- ices_rect %>% 
-  filter(Area_27 %in% stk_divs) %>%
-  summarise(N = length(unique(ICESNAME)))
-
-# the data for each survey is stored in `stk_data_filtered`
-# calculate the number of rectangles surveyed in the stock boundary for each survey
-meanrects <- data.frame()
-for(SurveyFolder in 1:length(stk_data_filtered)){
-  for(IndexFolder in 1:length((stk_data_filtered[[SurveyFolder]]))){
-    survrec <- stk_data_filtered[[SurveyFolder]][[IndexFolder]]$hlhh %>%
-      filter(Area_27 %in% stk_divs) %>%
-      group_by(Year) %>%
-      summarise(ny = length(unique(StatRec)))
-    n <- mean(survrec$ny)
-    output <- c(stk.chr, 
-                paste0(stk_divs, collapse = ", "), 
-                min(stk_data_filtered[[SurveyFolder]][[IndexFolder]]$hlhh$Year),
-                max(stk_data_filtered[[SurveyFolder]][[IndexFolder]]$hlhh$Year),
-                names(stk_data_filtered[SurveyFolder]), 
-                names(stk_data_filtered[[SurveyFolder]][IndexFolder]), 
-                n)
-    meanrects <- rbind(meanrects, output)
-  }
-}
-colnames(meanrects) <- c("StockID", "StkDivs", "YrStrt", "YrEnd", "SurveyIndex", "SurveyName", "MeanRects")
-meanrects$MeanRects <- as.numeric(meanrects$MeanRects)
-meanrects$TotalRects <- totrec$N
-meanrects$SurvCoverage <- round((meanrects$MeanRects/meanrects$TotalRects)*100, 2)
-meanrects$`Survey Index, Survey Name` <- paste0(meanrects$SurveyIndex, ", ", meanrects$SurveyName)
-survorder <- arrange(meanrects, desc(SurvCoverage))$`Survey Index, Survey Name`
-
-sdistk_long$`Survey Index, Survey Name` <- factor(sdistk_long$`Survey Index, Survey Name`, levels=survorder)
-
-### Colours for consistency ####
-library(RColorBrewer)
-library(paletteer)
-
-if(type == "AllSurveys"){
-  #colrs <- c(hue_pal()(length(unique(sdistk_long$`Survey Index, Survey Name`))))
-  #colrs <- c(viridis::viridis(length(unique(sdistk_long$`Survey Index, Survey Name`))))
-  #colrs <- brewer.pal(n=length(unique(sdistk_long$`Survey Index, Survey Name`)), "Accent")
-  #colrs <- paletteer_d("ggthemes::calc", n=length(unique(sdistk_long$`Survey Index, Survey Name`, type = "continuous")))
-   colrs <- c("blue4", "cyan4", "limegreen", "gold3", "darkorange1", "red3", "purple3", "#C1B56B")
-   
-  srvys <- sort(unique(sdistk_long$`Survey Index, Survey Name`))
-  names(colrs) <- srvys}
-if(type == "BestSurveys"){
-  b <- paste0(bestsurveys$SurveyIndex, ", ", bestsurveys$SurveyName)
-  colrs <- colrs[b]
-}
 
 ### Order Indicators ####
 indorder <- c("CoG (x)", "CoG (y)", "Inertia (million)", 
@@ -510,8 +509,11 @@ if(type == "BestSurveys"){
                 sdistk_long$`Spatial Indicator` == "CoG (y)",]$`Spatial Indicator Value` <- NaN
 }
 
+## Order surveys by coverage ####
+sdistk_long$`Survey Index, Survey Name` <- factor(sdistk_long$`Survey Index, Survey Name`, levels=survorder)
+
 sdi_plot1 <- ggplot() + 
-  geom_line(data = sdistk_long, aes(x = Year, y = `Spatial Indicator Value`, colour = `Survey Index, Survey Name`), linewidth = 1, key_glyph = "rect") + 
+  geom_line(data = sdistk_long, aes(x = Year, y = `Spatial Indicator Value`, colour = `Survey Index, Survey Name`), linewidth = 0.6, key_glyph = "rect") + 
   scale_colour_manual(values = colrs) +
   facet_wrap(vars(factor(`Spatial Indicator`, levels = indorder)), scales = "free") +
   labs(title = paste0("Spatial Indicator Time Series (", stk.chr, ")"))+
@@ -619,7 +621,7 @@ rocAll_long$`Survey Index, Survey Name` <- factor(rocAll_long$`Survey Index, Sur
 
 ## 6.2 Plot ####
 roc_plot <- ggplot() +
-  geom_path(data = rocAll_long, aes(x = FPR, y = TPR, colour = `Survey Index, Survey Name`), size = 1, alpha = 0.6, key_glyph = "rect") +
+  geom_path(data = rocAll_long, aes(x = FPR, y = TPR, colour = `Survey Index, Survey Name`), size = 1, alpha = 0.9, key_glyph = "rect") +
   geom_point(data = optthresh, aes(x = FPR, y = TPR, colour = `Survey Index, Survey Name`), size = 2) +
   scale_colour_manual(values = colrs) + 
   geom_abline(slope = 1, intercept = 0, lty = 2) +
@@ -671,7 +673,7 @@ optthresh <- rocAll_long %>%
 
 ## 7.2 Plot ####
 tss_plot <- ggplot() +
-  geom_line(data = rocAll_long, aes(x = `Spatial Indicator Value`, y = TSS, colour = `Survey Index, Survey Name`), size = 1, alpha = 0.6, key_glyph = "rect") +
+  geom_line(data = rocAll_long, aes(x = `Spatial Indicator Value`, y = TSS, colour = `Survey Index, Survey Name`), linewidth = 0.8, alpha = 0.9, key_glyph = "rect") +
   geom_point(data = optthresh, aes(x = `Spatial Indicator Value`, y = TSS, colour = `Survey Index, Survey Name`), size = 2) +
   scale_colour_manual(values = colrs) + 
   geom_abline(slope = c(0,0)) +
@@ -908,7 +910,7 @@ if(type == "BestSurveys"){
 
 ## 10.4 Plot SIs with OptThresh ####
 optthresh_plot2 <- ggplot() + 
-  geom_line(data = sdistk_stndrd, aes(x = Year, y = `Spatial Indicator Value/OptThresh`, colour = `Survey Index, Survey Name`), key_glyph = "rect") + 
+  geom_line(data = sdistk_stndrd, aes(x = Year, y = `Spatial Indicator Value/OptThresh`, colour = `Survey Index, Survey Name`), linewidth = 0.6, key_glyph = "rect") + 
   geom_hline(yintercept = 1, colour = "grey20", lty = 2) +
   scale_colour_manual(values = colrs) +
   facet_wrap(vars(factor(`Spatial Indicator`, levels = indorder)), scales = "free") +
@@ -944,6 +946,9 @@ optthresh_plot2 <- ggplot() +
 optthresh_plot <- ggdraw()+ draw_plot(optthresh_plot2)+ draw_plot(ssb_plot, x= .76, y= 0.2977, width=.206, height = .206)
 ## 10.6 Save ####
 cowplot::save_plot(plot = optthresh_plot, filename = paste0(si.plot.path, "/", "OptSpatIndPlot-", stk.chr, ".png"), base_height = 25, base_width = 12)
+
+### View all plots ####
+sdissb_plot; roc_plot; tss_plot; AUC_plot; tssSum_plot3; optthresh_plot
 
 # 11. Best Surveys ####
 #> the 'best' surveys are considered those which cover most of the stock boundary
