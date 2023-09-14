@@ -1,6 +1,6 @@
 #> Calculate Spatial Indicators
 #> Loop through all stocks at once
-
+rm(list = ls())
 ### A. Load in requirements ####
 # load packages
 pckgs <- c("FLCore", "FLBRP", "dplyr", "ggplot2", "ggplotFL", "rgdal", 
@@ -32,6 +32,8 @@ stocklist <- list(cod.27.47d20_nov, had.27.46a20, ple.27.420, ple.27.7d,
                   pok.27.3a46, sol.27.4, tur.27.4, whg.27.47d, wit.27.3a47d) # ignore so.27.7d for now, need to find YFS survey data
 stocklist.chr <- list("cod.27.47d20_nov", "had.27.46a20", "ple.27.420", "ple.27.7d", 
                       "pok.27.3a46", "sol.27.4", "tur.27.4", "whg.27.47d", "wit.27.3a47d") # ignore so.27.7d for now, need to find YFS survey data
+
+type <- "AllSurveys" # name added to signify filter for best surveys
 
 ### B. Calculate Spatial Indicators ####
 meanrects <- data.frame() # storage for ordering surveys by coverage
@@ -99,7 +101,6 @@ for(i in 1:length(stocklist)){
   # Check that surveys loaded are what we expect
   summary(data.list)
   row.names(summary(data.list)) %in% unique(stk_surveys$survey_name) # should be TRUE
-  
   
   ###### 1.4.3 `stk_surveys_indices` (might not need) ####
   stk_surveys_indices <- allstk_metadata %>% filter(
@@ -198,9 +199,6 @@ for(i in 1:length(stocklist)){
     }
   }
   
-  ###### 1.5.3 Survey Coverage ####
-  type <- "AllSurveys" # name added to signify filter for best surveys
-
   #### 2. Calculate Spatial Indicators ####
   ##### 2.1 Start Loop ####
   
@@ -401,7 +399,7 @@ indorder <- c("CoG (x)", "CoG (y)", "Inertia (million)",
               "Positive Area (Haul)", "Convex Hull Area", "Ellipse Area")
 
 # Get all SDI data and convert into long format
-si.data.path <- paste0("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/1. Outputs/Data/SpatInd/", type, "/")
+si.data.path <- paste0("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/1. Outputs/Data/SpatInd/AllSurveys/")
 si.plot.path <- paste0("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/1. Outputs/Plots/SpatInd/", type, "/")
 
 sdi_longlist <- list()
@@ -461,6 +459,26 @@ for(i in 1:length(stocklist)){
   colrs <- c("blue4", "#00695C", "#8BC34A", "gold2", "#E78100FF", "#F5191CFF", "#9C27B0") # "#FFD320", 
   names(colrs) <- survorder
   
+  ##### 4.1 Best Surveys ####
+  if(type == "BestSurveys"){
+    stkbestsurveys <- filter(bestsurveys, StockID == stk.chr)
+    # Filter out surveys that do not have at least 25% coverage
+    sdistk_long <- filter(sdistk_long, 
+                          StockID %in% stkbestsurveys$StockID,
+                          SurveyIndex %in% stkbestsurveys$SurveyIndex,
+                          Survey %in% stkbestsurveys$SurveyName,
+                          `Survey Index, Survey Name` %in% stkbestsurveys$`Survey Index, Survey Name`)
+    # Remove CoG (add other inds if desired)
+    sdistk_long[sdistk_long$`Spatial Indicator` == "CoG (x)" | 
+                  sdistk_long$`Spatial Indicator` == "CoG (y)",]$`Spatial Indicator Value` <- NaN
+    # Keep colours consistent between allsurvey plots and bestsurevy plots
+    b <- paste0(stkbestsurveys$SurveyIndex, ", ", stkbestsurveys$SurveyName)
+    colrs <- colrs[b]
+  }
+  if(nrow(sdistk_long) == 0){
+    next
+  }
+  
   # Get SSB for survey years
   writeLines("Get SSB for survey years")
   
@@ -497,6 +515,8 @@ for(i in 1:length(stocklist)){
   
   # Plot SDIs
   writeLines("Plot Spatial Indicators")
+  # Filter years so that the years in the spatind plot donot predate the ssb plot
+  sdistk_long <- sdistk_long %>% filter(Year %in% stkssb$Year)
   sdi_plot1 <- ggplot() + 
     geom_line(data = sdistk_long, aes(x = Year, y = `Spatial Indicator Value`, colour = `Survey Index, Survey Name`), key_glyph = "rect") + 
     scale_colour_manual(values = colrs) +
@@ -616,6 +636,34 @@ for(i in 1:length(list.files(roc.data.path))){
   colrs <- c("blue4", "#00695C", "#8BC34A", "gold2", "#E78100FF", "#F5191CFF", "#9C27B0") # "#FFD320", 
   names(colrs) <- survorder
   
+  ##### 4.1 Best Surveys ####
+  if(type == "BestSurveys"){
+    stkbestsurveys <- filter(bestsurveys, StockID == stk.chr)
+    # Filter out surveys that do not have at least 25% coverage
+    rocAll_long <- filter(rocAll_long, 
+                          StockID %in% stkbestsurveys$StockID,
+                          SurveyIndex %in% stkbestsurveys$SurveyIndex,
+                          Survey %in% stkbestsurveys$SurveyName,
+                          `Survey Index, Survey Name` %in% stkbestsurveys$`Survey Index, Survey Name`)
+    if(nrow(rocAll_long) > 0){
+    # Remove CoG (add other inds if desired)
+    rocAll_long[rocAll_long$`Spatial Indicator` == "CoG (x)" | 
+                  rocAll_long$`Spatial Indicator` == "CoG (y)",]$FPR <- NaN
+    rocAll_long[rocAll_long$`Spatial Indicator` == "CoG (x)" | 
+                  rocAll_long$`Spatial Indicator` == "CoG (y)",]$TPR <- NaN
+    rocAll_long[rocAll_long$`Spatial Indicator` == "CoG (x)" | 
+                  rocAll_long$`Spatial Indicator` == "CoG (y)",]$TSS <- NaN
+    rocAll_long[rocAll_long$`Spatial Indicator` == "CoG (x)" | 
+                  rocAll_long$`Spatial Indicator` == "CoG (y)",]$AUC <- NaN
+    # Keep colours consistent between allsurvey plots and bestsurevy plots
+    b <- paste0(stkbestsurveys$SurveyIndex, ", ", stkbestsurveys$SurveyName)
+    colrs <- colrs[b]
+    }
+  }
+  if(nrow(rocAll_long) == 0){
+    next
+  }
+  
   #### 2. Optimum Threshold #### 
   # Get the optimum threshold for each survey for each spatial ind
   optthresh <- rocAll_long %>%
@@ -683,6 +731,33 @@ for(i in 1:length(list.files(roc.data.path))){
   colrs <- c("blue4", "#00695C", "#8BC34A", "gold2", "#E78100FF", "#F5191CFF", "#9C27B0") # "#FFD320", 
   names(colrs) <- survorder
   
+  if(type == "BestSurveys"){
+    stkbestsurveys <- filter(bestsurveys, StockID == stk.chr)
+    # Filter out surveys that do not have at least 25% coverage
+    rocAll_long <- filter(rocAll_long, 
+                          StockID %in% stkbestsurveys$StockID,
+                          SurveyIndex %in% stkbestsurveys$SurveyIndex,
+                          Survey %in% stkbestsurveys$SurveyName,
+                          `Survey Index, Survey Name` %in% stkbestsurveys$`Survey Index, Survey Name`)
+    if(nrow(rocAll_long) > 0){
+      # Remove CoG (add other inds if desired)
+      rocAll_long[rocAll_long$`Spatial Indicator` == "CoG (x)" | 
+                    rocAll_long$`Spatial Indicator` == "CoG (y)",]$FPR <- NaN
+      rocAll_long[rocAll_long$`Spatial Indicator` == "CoG (x)" | 
+                    rocAll_long$`Spatial Indicator` == "CoG (y)",]$TPR <- NaN
+      rocAll_long[rocAll_long$`Spatial Indicator` == "CoG (x)" | 
+                    rocAll_long$`Spatial Indicator` == "CoG (y)",]$TSS <- NaN
+      rocAll_long[rocAll_long$`Spatial Indicator` == "CoG (x)" | 
+                    rocAll_long$`Spatial Indicator` == "CoG (y)",]$AUC <- NaN
+      # Keep colours consistent between allsurvey plots and bestsurevy plots
+      b <- paste0(stkbestsurveys$SurveyIndex, ", ", stkbestsurveys$SurveyName)
+      colrs <- colrs[b]
+    }
+  }
+  if(nrow(rocAll_long) == 0){
+    next
+  }
+  
   #### 2. Optimum Threshold #### 
   # Get the optimum threshold for each survey for each spatial ind
   optthresh <- rocAll_long %>%
@@ -742,23 +817,90 @@ for(i in 1:length(list.files(roc.data.path))){
   auc_df <- rbind(auc_df, rocAll_long)
 }
 
+#### 2. Best Surveys ####
+if(type == "BestSurveys"){
+  # Filter out surveys that do not have at least 25% coverage
+  auc_df <- filter(auc_df, 
+                   StockID %in% bestsurveys$StockID,
+                   SurveyIndex %in% bestsurveys$SurveyIndex,
+                   Survey %in% bestsurveys$SurveyName,
+                   `Survey Index, Survey Name` %in% bestsurveys$`Survey Index, Survey Name`)
+  if(nrow(auc_df) > 0){
+    # Remove CoG data (add other inds if desired)
+    auc_df[auc_df$`Spatial Indicator` == "CoG (x)" | 
+             auc_df$`Spatial Indicator` == "CoG (y)",]$AUC <- NaN
+    auc_df[auc_df$`Spatial Indicator` == "CoG (x)" | 
+             auc_df$`Spatial Indicator` == "CoG (y)",]$TSS <- NaN
+    # Keep colours consistent between allsurvey plots and bestsurvey plots
+    #b <- paste0(bestsurveys$SurveyIndex, ", ", bestsurveys$SurveyName)
+    #colrs <- colrs[b]
+  }
+}
+
 #### 2. x-axis labels ####
 auc_df$names <- paste(auc_df$StockID, auc_df$`Survey Index, Survey Name`)
+##### 2.1 Order by survey coverage ####
+if(type == "AllSurveys"){
+  meanrects2 <- meanrects %>%
+    mutate(names = paste(meanrects$StockID, meanrects$`Survey Index, Survey Name`)) %>%
+    arrange(StockID, desc(SurvCoverage)) %>% # descending survcov within each stock
+    select(names, SurvCoverage)
+  auc_df2 <- merge(auc_df, meanrects2, by = "names")
+  auc_df2$names <- factor(auc_df2$names, levels=meanrects2$names) # this reorders the plotting of bars
+}
+if(type == "BestSurveys"){
+  meanrects2 <- bestsurveys %>%
+    mutate(names = paste(bestsurveys$StockID, bestsurveys$`Survey Index, Survey Name`)) %>%
+    arrange(StockID, desc(SurvCoverage)) %>% # descending survcov within each stock
+    select(names, SurvCoverage)
+  auc_df2 <- merge(auc_df, meanrects2, by = "names")
+  auc_df2$names <- factor(auc_df2$names, levels=meanrects2$names) # this reorders the plotting of bars
+}
+
+# Here we get the names of the surveys in the correct order but without the stock appended to it
+# which is what would happen if we just used `names`
+# we have to use `names` because some stocks have identical `Survey Index, Survey Name`s
 lablist <- list()
-for(i in 1:length(unique(auc_df$names))){
-  test <- sort(unique(auc_df$names))[i]
-  split <- strsplit(test, " ")[[1]]
-  k <- strsplit(test, " ")[[1]][2:length(split)]
-  lab <- paste(k, collapse = " ")
+for(i in 1:length(unique(auc_df2$names))){
+  namesorder <- unique(as.character(arrange(auc_df2, StockID, desc(SurvCoverage))$names))
+  splitname <- strsplit(namesorder, " ")[[i]] # split name into segments
+  remID <- strsplit(namesorder, " ")[[i]][2:length(splitname)] # remove stock ID from name
+  lab <- paste(remID, collapse = " ") # concat back together
   lablist[i] <- lab
 }
 labels <- unlist(lablist)
 
+# NOTE: Must check that bars match up with correct labels
+# Check these values against the plot
+auc_df2 %>% 
+  select(names, `Spatial Indicator`, AUC, SurvCoverage) %>%
+  group_by(names, `Spatial Indicator`) %>% 
+  distinct() %>%
+  filter(`Spatial Indicator` == "Positive Area (Rectangle)")
+
+# Add proportion of AUC > 0.75 per indicator
+Nsurvs <- length(unique(as.character(auc_df2$names[!is.na(auc_df2$AUC)]))) # where AUC is available. 
+# Where AUC isnt available means ROC could not be conducted and should not be included when calcing the porportion
+# as.cchar removes factoring
+aucprops <- auc_df2 %>% 
+  select(`Spatial Indicator`, AUC) %>%
+  na.omit() %>%
+  group_by(`Spatial Indicator`) %>% 
+  distinct() %>%
+  mutate(prop75auc = paste0(round(length(AUC[AUC>=0.75])/Nsurvs*100,1), "%"),
+         prop50auc = paste0(round(length(AUC[AUC>0.5])/Nsurvs*100,1), "% > 0.5")) %>%
+  select(-AUC) %>%
+  distinct()
+
 #### 3. Plot AUC ####
-AUC_plot <- ggplot() +
-  geom_col(data = auc_df, aes(x = names, y = AUC, fill = StockID), position = position_dodge(width = 2), width = 0.8) +
+AUC_plot <- ggplot(data = auc_df2) +
+  geom_col(data = auc_df2, aes(x = names, y = AUC, fill = StockID), position = position_dodge(width = 2), width = 0.8) +
+  geom_text(data = aucprops, aes(x = length(unique(auc_df2$names))-2, y = 1, label = c(aucprops$prop75auc)), size = 3.3) +
+  #geom_text(data = props, aes(x = length(unique(auc_df2$names))-5, y = 0.9, label = c(props$prop50auc)), size = 3.3) +
   scale_x_discrete(labels = labels) +
-  geom_hline(yintercept = 0.5, colour = "grey20", lty = 2) +
+  geom_hline(yintercept = 0.5, colour = "grey20", lty = 1) +
+  geom_hline(yintercept = 0.75, colour = "grey20", lty = 2) +
+  
   facet_wrap(vars(factor(`Spatial Indicator`, levels = indorder))) +
   xlab("Survey Index, Survey Name") +
   ylab("Area Under ROC Curve") +
@@ -792,28 +934,92 @@ for(i in 1:length(list.files(roc.data.path))){
   tssSum_df <- rbind(tssSum_df, rocAll_long)
 }
 
-tssSum_df1 <- tssSum_df %>%
-  select(StockID, `Survey Index, Survey Name`, `Spatial Indicator`, TSS) %>%
-  group_by(StockID, `Survey Index, Survey Name`, `Spatial Indicator`) %>%
-  summarise(maxTSS = max(TSS))
-  
+#### 2. Best Surveys ####
+if(type == "BestSurveys"){
+  # Filter out surveys that do not have at least 25% coverage
+  tssSum_df <- filter(tssSum_df, 
+                   StockID %in% bestsurveys$StockID,
+                   SurveyIndex %in% bestsurveys$SurveyIndex,
+                   Survey %in% bestsurveys$SurveyName,
+                   `Survey Index, Survey Name` %in% bestsurveys$`Survey Index, Survey Name`)
+  if(nrow(tssSum_df) > 0){
+    # Remove CoG data (add other inds if desired)
+    tssSum_df[tssSum_df$`Spatial Indicator` == "CoG (x)" | 
+                tssSum_df$`Spatial Indicator` == "CoG (y)",]$AUC <- NaN
+    tssSum_df[tssSum_df$`Spatial Indicator` == "CoG (x)" | 
+                tssSum_df$`Spatial Indicator` == "CoG (y)",]$TSS <- NaN
+    # Keep colours consistent between allsurvey plots and bestsurvey plots
+    #b <- paste0(bestsurveys$SurveyIndex, ", ", bestsurveys$SurveyName)
+    #colrs <- colrs[b]
+  }
+}
+
 #### 2. x-axis labels ####
-tssSum_df1$names <- paste(tssSum_df1$StockID, tssSum_df1$`Survey Index, Survey Name`)
+tssSum_df$names <- paste(tssSum_df$StockID, tssSum_df$`Survey Index, Survey Name`)
+##### 2.1 Order by survey coverage ####
+if(type == "AllSurveys"){
+  meanrects2 <- meanrects %>%
+    mutate(names = paste(meanrects$StockID, meanrects$`Survey Index, Survey Name`)) %>%
+    arrange(StockID, desc(SurvCoverage)) %>% # descending survcov within each stock
+    select(names, SurvCoverage)
+  tssSum_df2 <- merge(tssSum_df, meanrects2, by = "names")
+  tssSum_df2$names <- factor(tssSum_df2$names, levels=meanrects2$names) # this reorders the plotting of bars
+}
+if(type == "BestSurveys"){
+  meanrects2 <- bestsurveys %>%
+    mutate(names = paste(bestsurveys$StockID, bestsurveys$`Survey Index, Survey Name`)) %>%
+    arrange(StockID, desc(SurvCoverage)) %>% # descending survcov within each stock
+    select(names, SurvCoverage)
+  tssSum_df2 <- merge(tssSum_df, meanrects2, by = "names")
+  tssSum_df2$names <- factor(tssSum_df2$names, levels=meanrects2$names) # this reorders the plotting of bars
+}
+
+# Here we get the names of the surveys in the correct order but without the stock appended to it
+# which is what would happen if we just used `names`
+# we have to use `names` because some stocks have identical `Survey Index, Survey Name`s
 lablist <- list()
-for(i in 1:length(unique(tssSum_df1$names))){
-  test <- sort(unique(tssSum_df1$names))[i]
-  split <- strsplit(test, " ")[[1]]
-  k <- strsplit(test, " ")[[1]][2:length(split)]
-  lab <- paste(k, collapse = " ")
+for(i in 1:length(unique(tssSum_df2$names))){
+  namesorder <- unique(as.character(arrange(tssSum_df2, StockID, desc(SurvCoverage))$names))
+  splitname <- strsplit(namesorder, " ")[[i]] # split name into segments
+  remID <- strsplit(namesorder, " ")[[i]][2:length(splitname)] # remove stock ID from name
+  lab <- paste(remID, collapse = " ") # concat back together
   lablist[i] <- lab
 }
 labels <- unlist(lablist)
 
+# NOTE: Must check that bars match up with correct labels
+# Check these values against the plot
+tssSum_df2 %>% 
+  select(names, `Spatial Indicator`, AUC, SurvCoverage) %>%
+  group_by(names, `Spatial Indicator`) %>% 
+  distinct() %>%
+  filter(`Spatial Indicator` == "Positive Area (Rectangle)")
+# Find the max TSS
+tssSum_df3 <- tssSum_df2 %>%
+  select(StockID, `Survey Index, Survey Name`, `Spatial Indicator`, names, TSS) %>%
+  group_by(StockID, `Survey Index, Survey Name`, `Spatial Indicator`, names) %>%
+  summarise(maxTSS = max(TSS))
+
+# Add proportion of TSS > 0.5 per indicator
+Nsurvs <- length(unique(as.character(tssSum_df2$names[!is.na(tssSum_df2$AUC)]))) # where AUC is available. 
+# Where AUC isnt available means ROC could not be conducted and should not be included when calcing the porportion
+# as.cchar removes factoring
+tssprops <- tssSum_df3 %>% 
+  select(`Spatial Indicator`, maxTSS) %>%
+  na.omit() %>%
+  group_by(`Spatial Indicator`) %>% 
+  distinct() %>%
+  mutate(prop05tss = paste0(round(length(maxTSS[maxTSS>=0.5])/Nsurvs*100,1), "%"),
+         prop00tss = paste0(round(length(maxTSS[maxTSS>0])/Nsurvs*100,1), "% > 0.5")) %>%
+  select(-maxTSS) %>%
+  distinct()
+
 #### 3. Plot TSS Summary ####
 tssSum_plot <- ggplot() +
-  geom_col(data = tssSum_df1, aes(x = names, y = maxTSS, fill = StockID), position = position_dodge(width = 2), width = 0.8) +
+  geom_col(data = tssSum_df3, aes(x = names, y = maxTSS, fill = StockID), position = position_dodge(width = 2), width = 0.8) +
+  geom_text(data = tssprops, aes(x = length(unique(tssSum_df2$names))-2, y = 1, label = c(tssprops$prop05tss)), size = 3.3) +
   scale_x_discrete(labels = labels) +
-  geom_hline(yintercept = 0, colour = "grey20", lty = 2) +
+  geom_hline(yintercept = c(0, 0.5), colour = "grey20", lty = 2) +
   facet_wrap(vars(factor(`Spatial Indicator`, levels = indorder))) +
   xlab("Survey Index, Survey Name") +
   ylab("True Skill Score of Optimised Threshold") +
@@ -834,7 +1040,7 @@ dir.create(paste0(tssSum.plot.path, "allstocks"), recursive = TRUE)
 cowplot::save_plot(plot = tssSum_plot, filename = paste0(tssSum.plot.path, "allstocks/tssSumPlot.png"), base_height = 8, base_width = 12)
 
 #### 5. Alternative TSS Summary Plots ####
-tssSum_df2 <- tssSum_df %>%
+tssSum_df4 <- tssSum_df2 %>%
   group_by(StockID, `Survey Index, Survey Name`, `Spatial Indicator`, names) %>%
   summarise(y0 = min(TSS),
             y25 = quantile(TSS, 0.25, na.rm = T),
@@ -843,11 +1049,13 @@ tssSum_df2 <- tssSum_df %>%
             y100 = max(TSS))
 
 tssSum_plot2 <- ggplot() +
-  geom_errorbar(data = tssSum_df2, aes(x = names, ymin = y0, ymax = y100), colour = "black", width = 0.5, key_glyph = "rect") +
-  geom_boxplot(data = tssSum_df2, aes(x = names, ymin = y0, ymax = y100, lower = y25, upper = y75, middle = y50, fill = StockID),colour = "grey20", stat="identity", key_glyph = "rect") +
+  geom_errorbar(data = tssSum_df4, aes(x = names, ymin = y0, ymax = y100), colour = "black", width = 0.5, key_glyph = "rect") +
+  geom_boxplot(data = tssSum_df4, aes(x = names, ymin = y0, ymax = y100, lower = y25, upper = y75, middle = y50, fill = StockID),colour = "grey20", stat="identity", key_glyph = "rect") +
+  geom_text(data = tssprops, aes(x = length(unique(tssSum_df2$names))-2, y = 1, label = c(tssprops$prop05tss)), size = 3.3) +
   facet_wrap(vars(factor(`Spatial Indicator`, levels = indorder))) +
   scale_x_discrete(labels = labels) +
-  geom_hline(yintercept = 0, colour = "grey20", lty = 2) +
+  geom_hline(yintercept = 0, colour = "grey20", lty = 1) +
+  geom_hline(yintercept = 0.5, colour = "grey20", lty = 2) +
   scale_y_continuous(expand = expansion(mult = c(0, 0.1))) + 
   xlab("Survey Index, Survey Name") +
   ylab("True Skill Score (TSS)") +
@@ -873,10 +1081,12 @@ dir.create(paste0(tssSum.plot.path, "allstocks"), recursive = TRUE)
 cowplot::save_plot(plot = tssSum_plot2, filename = paste0(tssSum.plot.path, "allstocks/tssSumPlot2.png"), base_height = 8, base_width = 12)
 
 tssSum_plot3 <- ggplot() +
-  geom_errorbar(data = tssSum_df2, aes(x = names, ymin = y0, ymax = y100, colour = StockID), width = 0.9, key_glyph = "rect", linewidth = 0.5) +
+  geom_errorbar(data = tssSum_df4, aes(x = names, ymin = y0, ymax = y100, colour = StockID), width = 0.9, key_glyph = "rect", linewidth = 0.5) +
+  geom_text(data = tssprops, aes(x = length(unique(tssSum_df2$names))-2, y = 1, label = c(tssprops$prop05tss)), size = 3.3) +
   facet_wrap(vars(factor(`Spatial Indicator`, levels = indorder))) +
   scale_x_discrete(labels = labels) +
-  geom_hline(yintercept = 0, colour = "grey20", lty = 2) +
+  geom_hline(yintercept = 0, colour = "grey20", lty = 1) +
+  geom_hline(yintercept = 0.5, colour = "grey20", lty = 2) +
   scale_y_continuous(expand = expansion(mult = c(0, 0.1))) + 
   xlab("Survey Index, Survey Name") +
   ylab("True Skill Score (TSS)") +
@@ -907,77 +1117,62 @@ cowplot::save_plot(plot = tssSum_plot3, filename = paste0(tssSum.plot.path, "all
 si.data.path <- paste0("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/1. Outputs/Data/SpatInd/", type, "/")
 si.plot.path <- paste0("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/1. Outputs/Plots/SpatInd/", type, "/")
 
-sdi_longlist <- list()
-sdi_widelist <- list()
-i <- 1
-
-for(StockFolder in stocklist.chr){
-  message(paste0("Stock: ", StockFolder))
-  for(IndexFolder in list.files(paste0(si.data.path, StockFolder))){
-    message(paste0("Survey Index: ", IndexFolder))
-    for(SurveyFolder in list.files(paste0(si.data.path, StockFolder, "/", IndexFolder))){
-      print(noquote(paste0("Survey: ", SurveyFolder)))
-      #Load  Data
-      si_file <- list.files(paste0(si.data.path, StockFolder, "/", IndexFolder, "/", SurveyFolder), pattern = "*SpatIndData*")
-      load(paste0(si.data.path, StockFolder, "/", IndexFolder, "/", SurveyFolder, "/", si_file))
-      si$Inertia <- si$Inertia/1000000
-      colnames(si)[colnames(si)=="Inertia"] <- "Inertia (million)"
-      sdi_widelist[[i]] <- si
-      #  Convert wide to long 
-      si_long <- si %>% tidyr::pivot_longer(cols = indorder, 
-                                            names_to = "Spatial Indicator",
-                                            values_to = "Spatial Indicator Value")
-      si_long$`Spatial Indicator` <- factor(si_long$`Spatial Indicator`, levels = indorder) # factor & relocate
-      sdi_longlist[[i]] <- si_long
-      i <- i + 1
-    }
-  }
-}
-
-##### 1.1 Merge Data ####
-sdiall_long <- do.call(rbind, sdi_longlist)
-sdiall_wide <- do.call(rbind, sdi_widelist)
-# Create new column for line plot
-sdiall_long$`Survey Index, Survey Name` <- paste0(sdiall_long$SurveyIndex, ", ", sdiall_long$Survey)
-sdiall_wide$`Survey Index, Survey Name` <- paste0(sdiall_wide$SurveyIndex, ", ", sdiall_wide$Survey)
-
 ##### 1.2 Add Optimum Threshold ####
 # Load data from section H
-tssSum.plot.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/ROC/TSSsummary_plot/"
-# All columns of data where TSS is maximised 
-#load(file = paste0(tssSum.plot.path, "tssSum_longdata.rda")) # tssSum_df 
 # Get the spat ind value where TSS was maximised 
 optthreshdata <- tssSum_df %>%
-  select(Year, StockID, SurveyIndex, Survey, `Survey Index, Survey Name`, `Spatial Indicator`, `Spatial Indicator Value`, `TSS`) %>%
-  rename("OptThresh" = `Spatial Indicator Value`, "MaxTSS" = TSS, "OptYear" = Year) %>%
-  filter(OptYear != 998)
-# There should be no duplicates in this check:
-if(any(duplicated(optthreshdata[2:6]))){
-  print("Multiple thresholds maximising TSS")
-  duprowno <- unique(sort(c(which(duplicated(optthreshdata[2:6])), which(duplicated(optthreshdata[2:6]))-1)))
-  duprows <- optthreshdata[duprowno,] %>%
-    rename("Year" = OptYear, "Spatial Indicator Value" = OptThresh, "TSS" = MaxTSS) %>%
-    mutate(Duplicate = "TRUE")
-  tssdup <- merge(tssSum_df, duprows, by = c("Year", "StockID", "SurveyIndex", "Survey", "Survey Index, Survey Name", "Spatial Indicator", "Spatial Indicator Value", "TSS"))
-  tssdup$TNR <- 1-tssdup$FPR
-  
-  duprows <- tssdup[tssdup$Duplicate == "TRUE",] %>% 
-    arrange(StockID, `Survey Index, Survey Name`, `Spatial Indicator`) %>%
-    group_by(StockID, `Survey Index, Survey Name`, `Spatial Indicator`) %>%
-    mutate(maxTNR = if_else(TNR == max(TNR), "TRUE", "FALSE")) %>%
-    relocate(maxTNR) %>%
-    select(maxTNR, Year, StockID, SurveyIndex, Survey, `Survey Index, Survey Name`, `Spatial Indicator`, `Spatial Indicator Value`, TSS) %>%
-    rename("OptYear" = Year, "OptThresh" = `Spatial Indicator Value`, "MaxTSS" = TSS)
-  optthreshdata <- full_join(optthreshdata, duprows, by = c("OptYear", "StockID", "SurveyIndex", "Survey", "Survey Index, Survey Name", "Spatial Indicator", "OptThresh", "MaxTSS")) %>%
-    mutate(maxTNR = if_else(is.na(maxTNR), "ignore", maxTNR)) %>%
-    filter(maxTNR != "FALSE") %>%
-    select(-maxTNR, -OptYear) %>%
-    group_by(StockID, SurveyIndex, Survey, `Survey Index, Survey Name`, `Spatial Indicator`) %>%
-    distinct()
-}
-# check again
-if(any(duplicated(optthreshdata[2:6]))){print("Still not okay")}
+  select(StockID, SurveyIndex, Survey, `Survey Index, Survey Name`, `Spatial Indicator`, `Spatial Indicator Value`, TSS, FPR) %>%
+  group_by(StockID, `Survey Index, Survey Name`, `Spatial Indicator`) %>%
+  mutate(maxTSS = if_else(TSS == max(TSS), TRUE, FALSE), TNR = 1-FPR) %>%
+  filter(maxTSS == TRUE) %>%
+  distinct()
 
+# Are there multiple spatial indictaor values that score the same TSS?
+if(any(duplicated(optthreshdata[c(1:5)]))){
+  message("Multiple thresholds maximising TSS. Selecting threshold that maxmises TNR")
+  # get row numbers
+  duprowno <- unique(sort(c(which(duplicated(optthreshdata[c(1:5)])), which(duplicated(optthreshdata[c(1:5)]))-1)))
+  # if there are mutliple thresholds that maximise classifcation
+  # we want to take the threshold that gets the negatives correct
+  # It is more important to identify a stock as unhealthy than it is healthy
+  optthreshdata[duprowno,]
+  pess <- optthreshdata[duprowno,] %>%
+    group_by(StockID, `Survey Index, Survey Name`, `Spatial Indicator`) %>%
+    mutate(maxTNR = if_else(TNR == max(TNR), TRUE, FALSE)) %>%
+    filter(maxTNR == TRUE) %>%
+    distinct()
+  # check to see if there are still duplicates 
+  if(any(duplicated(pess[c(1:5)]))){
+    message("Still duplciates after first clean. Selecting first instances")
+  duprowno2 <- unique(sort(c(which(duplicated(pess[c(1:5)])), which(duplicated(pess[c(1:5)]))-1)))
+  pess[duprowno2,]
+  pess2 <- pess[duprowno2,] %>%
+    group_by(StockID, `Survey Index, Survey Name`, `Spatial Indicator`) %>%
+    mutate(First = if_else(`Spatial Indicator Value` == min(`Spatial Indicator Value`), TRUE, FALSE)) %>%
+    filter(First == TRUE) %>%
+    distinct()
+  any(duplicated(pess2[c(1:5)]))
+  pess2
+  # remove duplicate rows from pess
+  pess <- anti_join(pess, pess[duprowno2,])
+  # join back rows with duplicates removed
+  pess <- rbind(pess, pess2)
+  }
+  # remove duplicated rows from optthreshdata  
+  optthreshdata2 <- anti_join(optthreshdata, optthreshdata[duprowno,])
+  # join back the rows which maximise TNR as well as TSS
+  optthreshdata3 <- rbind(optthreshdata2, pess)
+  # check if duplicates still exist
+  if(any(duplicated(optthreshdata3[c(1:5)]))){
+    message("Still some duplicates. Look at `pess3` data and resolve manually")
+  duprowno3 <- unique(sort(c(which(duplicated(optthreshdata3[c(1:5)])), which(duplicated(optthreshdata3[c(1:5)]))-1)))
+  pess3 <- optthreshdata3[duprowno3,]} else{message("All duplicates removed")}
+}
+optthreshdata <- optthreshdata3 %>% 
+  select(-maxTNR, -First, -TNR, -maxTSS, -FPR) %>%
+  rename(OptThresh = `Spatial Indicator Value`, maxTSS = TSS)
+
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 #> We have duplicates when multiple spatial indicator threshold values, give the
 #> same TSS, which also happens to be the max TSS. So there are multiple points
 #> where the TSS is maximized. How do we decide which threshold to choose?
@@ -990,9 +1185,10 @@ if(any(duplicated(optthreshdata[2:6]))){print("Still not okay")}
 #> neighboring thresholds. If the neighboring thresholds have only a slightly
 #> lower TSS, then this is better than having neighboring thresholds that have 
 #> very low or negative TSS. 
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 # Merge with spat ind data and divde spat inds by the optimal threshold
-# No everything above 1 = healthy, below 1 = unhealthy
+# Now everything above 1 = healthy, below 1 = unhealthy
 sdiall_stndrd <- left_join(sdiall_long, optthreshdata, by = c("StockID", "SurveyIndex", "Survey", "Survey Index, Survey Name", "Spatial Indicator"))
 sdiall_stndrd$`Spatial Indicator Value/OptThresh` <- sdiall_stndrd$`Spatial Indicator Value`/sdiall_stndrd$OptThresh
 
@@ -1064,13 +1260,38 @@ for(i in 1:length(stocklist)){
   scov <- filter(meanrects, StockID == stk.chr)
   # order surveys by coverage for plot legend
   survorder <- arrange(scov, desc(SurvCoverage))$`Survey Index, Survey Name`
-  rocAll_long$`Survey Index, Survey Name` <- factor(rocAll_long$`Survey Index, Survey Name`, levels=survorder)
+  sdistk_stndrd$`Survey Index, Survey Name` <- factor(sdistk_stndrd$`Survey Index, Survey Name`, levels=survorder)
+  #rocAll_long$`Survey Index, Survey Name` <- factor(rocAll_long$`Survey Index, Survey Name`, levels=survorder)
   # colours for surveys (cool = higher survey coverage)
   colrs <- c("blue4", "#00695C", "#8BC34A", "gold2", "#E78100FF", "#F5191CFF", "#9C27B0") # "#FFD320", 
   names(colrs) <- survorder
   # order surveys by coverage
-  sdistk_stndrd$`Survey Index, Survey Name` <- factor(sdistk_stndrd$`Survey Index, Survey Name`, levels=survorder)
+  #sdistk_stndrd$`Survey Index, Survey Name` <- factor(sdistk_stndrd$`Survey Index, Survey Name`, levels=survorder)
   
+  ####3.3 Best Surveys ####
+  if(type == "BestSurveys"){
+    stkbestsurveys <- filter(bestsurveys, StockID == stk.chr)
+    # Filter out surveys that do not have at least 25% coverage
+    sdistk_stndrd <- filter(sdistk_stndrd, 
+                          StockID %in% stkbestsurveys$StockID,
+                          SurveyIndex %in% stkbestsurveys$SurveyIndex,
+                          Survey %in% stkbestsurveys$SurveyName,
+                          `Survey Index, Survey Name` %in% stkbestsurveys$`Survey Index, Survey Name`)
+    # Remove CoG (add other inds if desired)
+    sdistk_stndrd[sdistk_stndrd$`Spatial Indicator` == "CoG (x)" | 
+                    sdistk_stndrd$`Spatial Indicator` == "CoG (y)",]$`Spatial Indicator Value` <- NaN
+    ## 10.0 Remove Inds < 0.5 TSS ####
+    sdistk_stndrd[sdistk_stndrd$maxTSS < 0.5 & !is.na(sdistk_stndrd$maxTSS),]$`Spatial Indicator Value/OptThresh` <- NaN
+    # Keep colours consistent between allsurvey plots and bestsurevy plots
+    b <- paste0(stkbestsurveys$SurveyIndex, ", ", stkbestsurveys$SurveyName)
+    colrs <- colrs[b]
+  }
+  if(nrow(sdistk_stndrd) == 0){
+    next
+  }
+  
+  # Filter years so that the years in the spatind plot donot predate the ssb plot
+  sdistk_stndrd <- sdistk_stndrd %>% filter(Year %in% stkssb$Year)
   #### 3.3 Plot SIs with OptThresh####
   writeLines("Plot Spatial Indicators with Optimal Threshold")
   optthresh_plot2 <- ggplot() + 
@@ -1109,8 +1330,63 @@ for(i in 1:length(stocklist)){
   #### 3.4 Overlay SSB & SDI ####
   writeLines("Plot layout")
   optthresh_plot <- ggdraw()+ draw_plot(optthresh_plot2)+ draw_plot(ssb_plot, x= .76, y= 0.2977, width=.206, height = .206)
-  ### 4. Save ####
+  #### 3.5 Save ####
   writeLines("Save")
   dir.create(paste0(si.plot.path, stk.chr))
   cowplot::save_plot(plot = optthresh_plot, filename = paste0(si.plot.path, stk.chr, "/OptSpatIndPlot-", stk.chr, ".png"), base_height = 25, base_width = 12)
 }
+
+### J. Best Surveys ####
+#> the 'best' surveys are considered those which cover most of the stock boundary
+#> first we need to objectively identify which ones this is
+#> then we will remove the surveys which only cover a small percentage of the stock boundary
+#> we will also remove surveys which have no stock status contrast in the those survey years
+#> if there is no contrast, the ROC curve cannot be calculated and this analysis is void
+
+#### 1. Stock Boundary Area ####
+meanrects
+#> this shows the mean percentage of rectangles in the stock boundary surveyed 
+#> across the years of data used in the stock assessment 
+#> Now we need to use this to filter the surveys out that are not 
+#> representative of the whole stock boundary
+#> E.g. those with survey coverage of less than 25%
+bestsurveys <- meanrects[meanrects$SurvCoverage >= 25,]
+bestsurveys
+
+#### 2. Surveys without contrast ####
+#> these are surveys where the ROC could not be computed 
+#> and therefore the classification ability could not tested using this survye data
+#> data does not show up on full plots, but the survey will still be in the legend
+#> lets remove these surveys
+#> here i identify the surveys where AUC == NaN, indictaing ROC could not calculated
+roc.data.path <- paste0("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/1. Outputs/Data/ROC/", type, "/")
+
+d <- list()
+for(i in 1:length(list.files(roc.data.path))){
+  roc_file <- list.files(paste0(roc.data.path, list.files(roc.data.path)[i], "/"), pattern = "*ROC_long*")
+  load(paste0(roc.data.path, list.files(roc.data.path)[i], "/", roc_file)) # loads as rocAll_long
+  stk.chr <- unique(rocAll_long$StockID)
+  rocAll_long$`Spatial Indicator Value` <- as.numeric(rocAll_long$`Spatial Indicator Value`)
+  d <- rbind(d, rocAll_long)
+}
+
+t <- d %>% filter(AUC == "NaN")
+setnames(t, "Survey", "SurveyName")
+
+# remove factoring
+t$`Survey Index, Survey Name` <- as.character(t$`Survey Index, Survey Name`)
+# find survey(s) with no contrast
+nocontrast <- unique(t[, 3:6])
+# remove from bests surveys
+bestsurveys <- anti_join(bestsurveys, nocontrast, by = c("StockID", "SurveyIndex", "SurveyName", "Survey Index, Survey Name"))
+# check removal
+nocontrast %in% bestsurveys[c("StockID", "SurveyIndex", "SurveyName", "Survey Index, Survey Name")]
+
+# Did we lose any stocks completely?
+writeLines(paste0("Stocks lost: ", length(unique(meanrects$StockID)) - length(unique(bestsurveys$StockID))))
+writeLines(setdiff(unique(meanrects$StockID), unique(bestsurveys$StockID)))
+
+type <- "BestSurveys" # this changes where the filtered analysis is saved so analysis with allsurveys is not overwritten
+# run from section C
+
+# NOTE: Analysis must be run with all surveys first
