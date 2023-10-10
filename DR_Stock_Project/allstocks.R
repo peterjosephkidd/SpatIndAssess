@@ -6,7 +6,7 @@ rm(list = ls())
 pckgs <- c("FLCore", "FLBRP", "dplyr", "ggplot2", "ggplotFL", "rgdal", 
            "DataExplorer", "rgeos", "sf", "mapplots", "maptools", "mapproj", 
            "beepr", "patchwork", "ineq", "icesDatras", "icesVocab", "scales", 
-           "readxl", "data.table", "zoo", "cowplot")
+           "readxl", "data.table", "zoo", "cowplot", "pracma")
 for(pkg in pckgs){
   library(pkg, character.only = T, quietly = T)
 }
@@ -24,6 +24,7 @@ load(paste0(getwd(), "/Data/ICES Divs/ices_divs.rds"))
 # Load stock metainformation
 allstk_metadata <- read_excel(paste0(getwd(), "/Data/DR_Stocks/Advice Sheets/2022/stock_metadata_refpts.xlsx"), sheet = "stk_metadata")
 allstk_refpts <- read_excel(paste0(getwd(), "/Data/DR_Stocks/Advice Sheets/2022/stock_metadata_refpts.xlsx"), sheet = "stk_refpts")
+allstk_spcsinfo <- read_excel(paste0(getwd(), "/Data/DR_Stocks/Advice Sheets/2022/stock_metadata_refpts.xlsx"), sheet = "spcs_info")
 
 # Load Stock Objects
 stockobj.path <- paste0(getwd(), "/Data/DR_Stocks/Stock Objects/2022/")
@@ -35,10 +36,15 @@ stocklist.chr <- list("cod.27.47d20_nov", "had.27.46a20", "ple.27.420", "ple.27.
 
 type <- "AllSurveys" # name added to signify filter for best surveys
 
+# Toggle to specific stocks or leave to run for all stocks
+#stocklist <- list(ple.27.420)
+#stocklist.chr <- list("ple.27.420")
+
 ### B. Calculate Spatial Indicators ####
 meanrects <- data.frame() # storage for ordering surveys by coverage
 
 for(i in 1:length(stocklist)){
+  tic()
   #### 1. Run Loop ####
   # Select the stock to analyse
   stk <- stocklist[[i]]
@@ -201,7 +207,6 @@ for(i in 1:length(stocklist)){
   
   #### 2. Calculate Spatial Indicators ####
   ##### 2.1 Start Loop ####
-  
   # Calculate the number of rectangles within the stock boundary
   # use ICES shapefiles and stk_divs from earlier
   totrec <- ices_rect %>% 
@@ -278,22 +283,6 @@ for(i in 1:length(stocklist)){
       ##### 2.5 Spread of Participation Index (SPI) ####
       #### Prep data
       writeLines(noquote("Spread of Participation Index"))
-      #spi_data <- spi_prep(hlhh = hlhh, 
-      #        yrs = yrs, 
-      #        qrs = qrs, 
-      #        species_aphia = species_aphia, 
-      #        stk_divs = stk_divs)
-      #### Calculate
-      #spi <- spi_data %>% 
-      #  group_by(Year) %>% # Year only, not quarter
-      #  filter(Area_27 %in% stk_divs) %>%
-      #  summarise(SPI = spi_calc(TotalNo_TotalDur, area = 1)) %>% # area=1 = all rects equal weight
-      #  mutate(Quarter = paste(as.character(sort(unique(spi_data$Quarter))), collapse = ", ")) %>% # add quarters
-      #  relocate(Year, Quarter)
-      #### Take inverse of SPI, so high numbers = good
-      #spi$SPI <- 1-spi$SPI 
-      #### Then change NaNs to 0
-      #spi$SPI[is.nan(spi$SPI)] <- 0 
       SPI <- spi(
         hlhh = hlhh,
         yrs = yrs,
@@ -325,20 +314,33 @@ for(i in 1:length(stocklist)){
         relocate(Year, Quarter)
       
       ##### 2.8 Centre of Gravity, Inertia, & 95% CI Ellipse ####
-      writeLines(noquote("Centre of Gravity (x and y)"))
-      writeLines(noquote("Inertia"))
-      writeLines(noquote("95% CI Ellipse"))
+      writeLines(noquote("CoG and Inertia"))
+      cog <- coginis(hlhh = hlhh,
+              yrs = yrs,
+              qrs = qrs,
+              species_aphia = species_aphia,
+              stk_divs = stk_divs,
+              iso = F, plot = F, density = F)
       
-      cog <- coginert(
+      #cog <- coginert(
+      #  hlhh = hlhh,
+      #  yrs = yrs,
+      #  qrs = qrs,
+      #  species_aphia = species_aphia,
+      #  stk_divs = stk_divs)
+      
+      ##### 2.9 Convex Hull Area ####
+      writeLines(noquote("Convex Hull Area"))
+      cha <- chullarea(
         hlhh = hlhh,
         yrs = yrs,
         qrs = qrs,
         species_aphia = species_aphia,
         stk_divs = stk_divs)
       
-      ##### 2.9 Convex Hull Area ####
-      writeLines(noquote("Convex Hull Area"))
-      cha <- chullarea(
+      ##### 2.10 Ellipse Area ####
+      writeLines(noquote("95% CI Ellipse"))
+      ela <- ellarea(
         hlhh = hlhh,
         yrs = yrs,
         qrs = qrs,
@@ -350,7 +352,7 @@ for(i in 1:length(stocklist)){
       message("\nMerging and saving spatial indicator data...")
       ## select the columns that we need
       Gini.index <- Gini.index[c("Year", "Quarter", "Gini Index")]
-      D95 <- D95[c("Year", "Quarter", "D95")]
+      D95 <- D95
       np.hauls <- np.hauls[c("Year", "Quarter", "PosAreaH")]
       np.rects <- np.rects[c("Year", "Quarter", "PosAreaR")]
       SPI <- SPI[c("Year", "Quarter", "SPI")]
@@ -358,17 +360,15 @@ for(i in 1:length(stocklist)){
       ea <- ea
       cog <- cog
       cha <- cha[c("Year", "Quarter", "areaoccupied")]
+      ela <- ela
+      
       ## merge
-      si <- Reduce(function(x, y) full_join(x, y, by = c("Year", "Quarter")), list(Gini.index, D95, np.hauls, np.rects, SPI, sa, ea, cog, cha)) 
+      si <- Reduce(function(x, y) full_join(x, y, by = c("Year", "Quarter")), list(Gini.index, D95, np.hauls, np.rects, SPI, sa, ea, cog, cha, ela)) 
       # `full_join` keeps rows where certain spatinds could not be calculated but others are available. `merge` removes these rows
       ## rename some columns
       si <- si %>%
         rename("Positive Area (Haul)" = PosAreaH,
                "Positive Area (Rectangle)" = PosAreaR,
-               "CoG (x)" = cg_x,
-               "CoG (y)" = cg_y, 
-               "Inertia" = inertia,
-               "Ellipse Area" = area_of_ellipse,
                "Convex Hull Area" = areaoccupied) %>%
         mutate(SurveyIndex = names(stk_data_filtered[indx]),
                Survey = names(stk_data_filtered[[indx]][survey]),
@@ -380,6 +380,8 @@ for(i in 1:length(stocklist)){
       save(si, file = paste0(path, "/SpatIndData - ", stk.chr, " - ", names(stk_data_filtered[indx]), " - ", names(stk_data_filtered[[indx]][survey]), ".rda"))
     }
   }
+  message("Complete")
+  toc()
 }
 
 # Organise survey coverage dataframe
@@ -388,15 +390,20 @@ meanrects$MeanRects <- as.numeric(meanrects$MeanRects)
 meanrects$TotalRects <- totrec$N
 meanrects$SurvCoverage <- round((meanrects$MeanRects/meanrects$TotalRects)*100, 2)
 meanrects$`Survey Index, Survey Name` <- paste0(meanrects$SurveyIndex, ", ", meanrects$SurveyName)
-#survorder <- arrange(meanrects, StockID, desc(SurvCoverage))$`Survey Index, Survey Name`
+# save 
+save(meanrects, file = paste0(getwd(), "/Data/meanrects.rda"))
+
 
 ### C. Plot Spatial Indicators ####
 #### 1. Load and Prepare Data ####
 # Order indicators for facet_wrap
-indorder <- c("CoG (x)", "CoG (y)", "Inertia (million)", 
-              "Gini Index", "D95", "Spreading Area", 
-              "Equivalent Area", "SPI", "Positive Area (Rectangle)", 
-              "Positive Area (Haul)", "Convex Hull Area", "Ellipse Area")
+indorder <- c("CoG (x)", "CoG (y)", # Location
+              "Inertia", "Convex Hull Area", "Ellipse Area", # Dispersion
+              "Positive Area (Rectangle)", "Positive Area (Haul)", # Occupancy
+              "Gini Index", "D95", "Spreading Area", # Aggregation 
+              "Equivalent Area", "SPI")
+# load meanrects
+load(paste0(getwd(), "/Data/meanrects.rda"))
 
 # Get all SDI data and convert into long format
 si.data.path <- paste0("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/1. Outputs/Data/SpatInd/AllSurveys/")
@@ -413,10 +420,10 @@ for(StockFolder in stocklist.chr){
     for(SurveyFolder in list.files(paste0(si.data.path, StockFolder, "/", IndexFolder))){
       print(noquote(paste0("Survey: ", SurveyFolder)))
       #Load  Data
-      si_file <- list.files(paste0(si.data.path, StockFolder, "/", IndexFolder, "/", SurveyFolder), pattern = "*SpatIndData*")
+      si_file <- list.files(paste0(si.data.path, StockFolder, "/", IndexFolder, "/", SurveyFolder, "/"), pattern = "*SpatIndData*")
       load(paste0(si.data.path, StockFolder, "/", IndexFolder, "/", SurveyFolder, "/", si_file))
-      si$Inertia <- si$Inertia/1000000
-      colnames(si)[colnames(si)=="Inertia"] <- "Inertia (million)"
+      #si$Inertia <- si$Inertia/1000000
+      #colnames(si)[colnames(si)=="Inertia"] <- "Inertia (million)"
       sdi_widelist[[i]] <- si
       #  Convert wide to long 
       si_long <- si %>% tidyr::pivot_longer(cols = indorder, 
@@ -437,6 +444,7 @@ sdiall_long$`Survey Index, Survey Name` <- paste0(sdiall_long$SurveyIndex, ", ",
 sdiall_wide$`Survey Index, Survey Name` <- paste0(sdiall_wide$SurveyIndex, ", ", sdiall_wide$Survey)
 
 for(i in 1:length(stocklist)){
+  tic()
   #### 4. Plot ####
   # Select the stock to analyse
   stk <- stocklist[[i]]
@@ -482,23 +490,26 @@ for(i in 1:length(stocklist)){
   # Get SSB for survey years
   writeLines("Get SSB for survey years")
   
-  strtyr <- min(sdistk_wide$Year)
+  strtyr <- min(sdistk_long$Year)
   if(strtyr < range(stk)["minyear"]){
     warning("First year of survey data provided preceeds first year of data in the stock object. Using minyear of the stock object instead.", immediate. = TRUE)
     strtyr <- range(stk)["minyear"]}
   
-  endyr <- max(sdistk_wide$Year)
+  endyr <- max(sdistk_long$Year)
   if(endyr > range(stk)["maxyear"]){
     warning("Last year of survey data provided exceeds available last year of data in the stock object. Using maxyear of the stock object instead.", immediate. = TRUE)
     endyr <- range(stk)["maxyear"]}  
   
+  msybtrig_refpt <- allstk_refpts$MSY_Btrigger[allstk_refpts$stk_name == stk.chr]
   stkssb <- as.data.frame(ssb(stk)[,ac(strtyr:endyr)])[c("year", "data")] %>%
     rename(Year = year, SSB = data) %>%
     mutate(type = "SSB")
+  stkssb$ssb.msybtrig <- stkssb$SSB/msybtrig_refpt
   
   # Plot SSB
   writeLines("Plot SSB")
-  ssb_plot <- ggplot() + geom_line(data = stkssb, aes(x = Year, y = SSB/1000000), colour = "black") +
+  ssb_plot <- ggplot() + geom_line(data = stkssb, aes(x = Year, y = ssb.msybtrig), colour = "black") +
+    geom_hline(yintercept = 1, colour = "grey20", lty = 2) +
     theme(panel.grid.major = element_line(colour = "grey90"),
           panel.grid.minor = element_blank(),
           panel.background = element_blank(),
@@ -510,7 +521,7 @@ for(i in 1:length(stocklist)){
           #axis.text.x = element_text(angle = 90, vjust = 0.3), # rotate & shift right
           axis.title = element_text(size = 10),
           aspect.ratio = 1) +
-    ylab("SSB (million tons)") +
+    ylab("SSB/MSY Btrigger") +
     facet_wrap(vars(`type`))
   
   # Plot SDIs
@@ -554,6 +565,7 @@ for(i in 1:length(stocklist)){
   writeLines("Save")
   dir.create(paste0(si.plot.path, stk.chr), recursive = TRUE)
   cowplot::save_plot(plot = sdissb_plot, filename = paste0(si.plot.path, stk.chr, "/", "SpatIndPlot-", stk.chr, ".png"), base_height = 25, base_width = 12)
+  toc()
 }
 
 ### D. Calculate ROC and TSS ####
@@ -562,6 +574,7 @@ roc.data.path <- paste0("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATR
 
 #### 2. Get stock specific data ####
 for(i in 1:length(stocklist)){
+  tic()
   # Select the stock to analyse
   stk <- stocklist[[i]]
   stk.chr <- stocklist.chr[[i]]
@@ -598,7 +611,7 @@ for(i in 1:length(stocklist)){
   #### 3.1 Set Parameters ####
   state <- "ssb.msybtrig"
   inds <- c("Gini Index", "D95", "Positive Area (Haul)", "Positive Area (Rectangle)", 
-            "SPI", "Spreading Area", "Equivalent Area", "CoG (x)", "CoG (y)", "Inertia (million)",
+            "SPI", "Spreading Area", "Equivalent Area", "CoG (x)", "CoG (y)", "Inertia",
             "Ellipse Area", "Convex Hull Area")
   roc_longlist <- list()
   #### 3.2 For each survey... ####
@@ -614,6 +627,7 @@ for(i in 1:length(stocklist)){
   #### 3.4 Save Data ####
   dir.create(paste0(roc.data.path, stk.chr), recursive = TRUE)
   save(rocAll_long, file = paste0(roc.data.path, stk.chr, "/", stk.chr, " - ROC_long.rda"))
+  toc()
 }
 
 ### E. Plot ROC ####
@@ -622,6 +636,7 @@ roc.data.path <- paste0("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATR
 roc.plot.path <- paste0("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/1. Outputs/Plots/ROC/", type, "/")
 
 for(i in 1:length(list.files(roc.data.path))){
+  tic()
   roc_file <- list.files(paste0(roc.data.path, list.files(roc.data.path)[i], "/"), pattern = "*ROC_long*")
   load(paste0(roc.data.path, list.files(roc.data.path)[i], "/", roc_file)) # loads as rocAll_long
 
@@ -708,6 +723,7 @@ for(i in 1:length(list.files(roc.data.path))){
   #### 4. Save ####
   dir.create(paste0(roc.plot.path, stk.chr), recursive = TRUE)
   cowplot::save_plot(plot = roc_plot, filename = paste0(roc.plot.path, stk.chr, "/", "rocPlot-", stk.chr, ".png"), base_height = 8, base_width = 12)
+  toc()
 }
 
 ### F. Plot TSS ####
@@ -716,6 +732,7 @@ roc.data.path <- paste0("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATR
 tss.plot.path <- paste0("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/1. Outputs/Plots/TSS/", type, "/")
 
 for(i in 1:length(list.files(roc.data.path))){
+  tic()
   roc_file <- list.files(paste0(roc.data.path, list.files(roc.data.path)[i], "/"), pattern = "*ROC_long*")
   load(paste0(roc.data.path, list.files(roc.data.path)[i], "/", roc_file)) # loads as rocAll_long
   
@@ -801,6 +818,7 @@ for(i in 1:length(list.files(roc.data.path))){
   #### 4. Save ####
   dir.create(paste0(tss.plot.path, stk.chr), recursive = TRUE)
   cowplot::save_plot(plot = tss_plot, filename = paste0(tss.plot.path, stk.chr, "/", "tssPlot-", stk.chr, ".png"), base_height = 8, base_width = 12)
+  toc()
 }
 
 ### G. Plot AUC ####
@@ -831,30 +849,41 @@ if(type == "BestSurveys"){
              auc_df$`Spatial Indicator` == "CoG (y)",]$AUC <- NaN
     auc_df[auc_df$`Spatial Indicator` == "CoG (x)" | 
              auc_df$`Spatial Indicator` == "CoG (y)",]$TSS <- NaN
-    # Keep colours consistent between allsurvey plots and bestsurvey plots
-    #b <- paste0(bestsurveys$SurveyIndex, ", ", bestsurveys$SurveyName)
-    #colrs <- colrs[b]
   }
 }
 
 #### 2. x-axis labels ####
 auc_df$names <- paste(auc_df$StockID, auc_df$`Survey Index, Survey Name`)
-##### 2.1 Order by survey coverage ####
-if(type == "AllSurveys"){
-  meanrects2 <- meanrects %>%
-    mutate(names = paste(meanrects$StockID, meanrects$`Survey Index, Survey Name`)) %>%
-    arrange(StockID, desc(SurvCoverage)) %>% # descending survcov within each stock
-    select(names, SurvCoverage)
-  auc_df2 <- merge(auc_df, meanrects2, by = "names")
-  auc_df2$names <- factor(auc_df2$names, levels=meanrects2$names) # this reorders the plotting of bars
-}
+
+##### 2.1 Order stocks by fisheries guild, growth rate, & survey coverage ####
+meanrects2 <- merge(meanrects, allstk_spcsinfo[,c("StockID", "k", "FisheriesGuild")], by = "StockID")
+meanrects2 <- meanrects2 %>%
+  mutate(names = paste(meanrects$StockID, meanrects$`Survey Index, Survey Name`)) %>%
+  arrange(FisheriesGuild, k, StockID, desc(SurvCoverage)) %>% # descending survcov within each stock
+  select(names, StockID, FisheriesGuild, k, SurvCoverage)
+auc_df2 <- merge(auc_df, meanrects2, by = c("names", "StockID"))
+auc_df2$names <- factor(auc_df2$names, levels=meanrects2$names) # this reorders the plotting of bars
+
+scale <- paletteer_c("grDevices::Zissou 1", n = 30)
+nbenth <- length(unique(auc_df2$StockID[auc_df2$FisheriesGuild == "Benthic"]))
+ndem <- length(unique(auc_df2$StockID[auc_df2$FisheriesGuild == "Demersal"]))
+
+#colrsbenth <- scale[seq(1, nbenth*3)][c(rep(FALSE, 2), TRUE)]
+#colrsdem <- rev(rev(scale)[seq(1, ndem*3)])[c(rep(FALSE, 2), TRUE)]
+#colrs <- c("#584B9F","#0086B3", "#0BC0B3", "lightblue", "#A9E9AD",  "#FDE38D", "#F8B84E", "#E97302", "#B72E48")
+colrs <- c("#584B9F","#0086B3", "#0BC0B3", "lightblue", "#A9E9AD","#B72E48", "#E97302", "#F8B84E", "#FDE38D")
+#colrs <- c(colrsbenth, colrsdem)
+names(colrs) <- unique(meanrects2$StockID)
+
 if(type == "BestSurveys"){
-  meanrects2 <- bestsurveys %>%
-    mutate(names = paste(bestsurveys$StockID, bestsurveys$`Survey Index, Survey Name`)) %>%
-    arrange(StockID, desc(SurvCoverage)) %>% # descending survcov within each stock
-    select(names, SurvCoverage)
-  auc_df2 <- merge(auc_df, meanrects2, by = "names")
+  bestsurveys2 <- merge(bestsurveys, allstk_spcsinfo[,c("StockID", "k", "FisheriesGuild")], by = "StockID")
+  meanrects2 <- bestsurveys2 %>%
+    mutate(names = paste(bestsurveys2$StockID, bestsurveys2$`Survey Index, Survey Name`)) %>%
+    arrange(FisheriesGuild, k, StockID, desc(SurvCoverage)) %>% # descending survcov within each stock
+    select(names, StockID, FisheriesGuild, k, SurvCoverage)
+  auc_df2 <- merge(auc_df, meanrects2, by = c("names", "StockID"))
   auc_df2$names <- factor(auc_df2$names, levels=meanrects2$names) # this reorders the plotting of bars
+  colrs <- colrs[c(unique(as.character(arrange(auc_df2, FisheriesGuild, k, StockID, desc(SurvCoverage))$StockID)))]
 }
 
 # Here we get the names of the surveys in the correct order but without the stock appended to it
@@ -862,7 +891,7 @@ if(type == "BestSurveys"){
 # we have to use `names` because some stocks have identical `Survey Index, Survey Name`s
 lablist <- list()
 for(i in 1:length(unique(auc_df2$names))){
-  namesorder <- unique(as.character(arrange(auc_df2, StockID, desc(SurvCoverage))$names))
+  namesorder <- unique(as.character(arrange(auc_df2, FisheriesGuild, k, StockID, desc(SurvCoverage))$names))
   splitname <- strsplit(namesorder, " ")[[i]] # split name into segments
   remID <- strsplit(namesorder, " ")[[i]][2:length(splitname)] # remove stock ID from name
   lab <- paste(remID, collapse = " ") # concat back together
@@ -895,6 +924,7 @@ aucprops <- auc_df2 %>%
 #### 3. Plot AUC ####
 AUC_plot <- ggplot(data = auc_df2) +
   geom_col(data = auc_df2, aes(x = names, y = AUC, fill = StockID), position = position_dodge(width = 2), width = 0.8) +
+  scale_fill_manual(breaks = names(colrs), values = colrs) + 
   geom_text(data = aucprops, aes(x = length(unique(auc_df2$names))-2, y = 1, label = c(aucprops$prop75auc)), size = 3.3) +
   #geom_text(data = props, aes(x = length(unique(auc_df2$names))-5, y = 0.9, label = c(props$prop50auc)), size = 3.3) +
   scale_x_discrete(labels = labels) +
@@ -974,12 +1004,43 @@ if(type == "BestSurveys"){
   tssSum_df2$names <- factor(tssSum_df2$names, levels=meanrects2$names) # this reorders the plotting of bars
 }
 
+##### 2.1 Order stocks by fisheries guild, growth rate, & survey coverage ####
+meanrects2 <- merge(meanrects, allstk_spcsinfo[,c("StockID", "k", "FisheriesGuild")], by = "StockID")
+meanrects2 <- meanrects2 %>%
+  mutate(names = paste(meanrects$StockID, meanrects$`Survey Index, Survey Name`)) %>%
+  arrange(FisheriesGuild, k, StockID, desc(SurvCoverage)) %>% # descending survcov within each stock
+  select(names, StockID, FisheriesGuild, k, SurvCoverage)
+tssSum_df2 <- merge(tssSum_df, meanrects2, by = c("names", "StockID"))
+tssSum_df2$names <- factor(tssSum_df2$names, levels=meanrects2$names) # this reorders the plotting of bars
+
+scale <- paletteer_c("grDevices::Zissou 1", n = 30)
+nbenth <- length(unique(tssSum_df2$StockID[tssSum_df2$FisheriesGuild == "Benthic"]))
+ndem <- length(unique(tssSum_df2$StockID[tssSum_df2$FisheriesGuild == "Demersal"]))
+
+#colrsbenth <- scale[seq(1, nbenth*3)][c(rep(FALSE, 2), TRUE)]
+#colrsdem <- rev(rev(scale)[seq(1, ndem*3)])[c(rep(FALSE, 2), TRUE)]
+#colrs <- c("#584B9F","#0086B3", "#0BC0B3", "lightblue", "#A9E9AD",  "#FDE38D", "#F8B84E", "#E97302", "#B72E48")
+colrs <- c("#584B9F","#0086B3", "#0BC0B3", "lightblue", "#A9E9AD","#B72E48", "#E97302", "#F8B84E", "#FDE38D")
+#colrs <- c(colrsbenth, colrsdem)
+names(colrs) <- unique(meanrects2$StockID)
+
+if(type == "BestSurveys"){
+  bestsurveys2 <- merge(bestsurveys, allstk_spcsinfo[,c("StockID", "k", "FisheriesGuild")], by = "StockID")
+  meanrects2 <- bestsurveys2 %>%
+    mutate(names = paste(bestsurveys2$StockID, bestsurveys2$`Survey Index, Survey Name`)) %>%
+    arrange(FisheriesGuild, k, StockID, desc(SurvCoverage)) %>% # descending survcov within each stock
+    select(names, StockID, FisheriesGuild, k, SurvCoverage)
+  tssSum_df2 <- merge(tssSum_df, meanrects2, by = c("names", "StockID"))
+  tssSum_df2$names <- factor(tssSum_df2$names, levels=meanrects2$names) # this reorders the plotting of bars
+  colrs <- colrs[c(unique(as.character(arrange(tssSum_df2, FisheriesGuild, k, StockID, desc(SurvCoverage))$StockID)))]
+}
+
 # Here we get the names of the surveys in the correct order but without the stock appended to it
 # which is what would happen if we just used `names`
 # we have to use `names` because some stocks have identical `Survey Index, Survey Name`s
 lablist <- list()
 for(i in 1:length(unique(tssSum_df2$names))){
-  namesorder <- unique(as.character(arrange(tssSum_df2, StockID, desc(SurvCoverage))$names))
+  namesorder <- unique(as.character(arrange(tssSum_df2, FisheriesGuild, k, StockID, desc(SurvCoverage))$names))
   splitname <- strsplit(namesorder, " ")[[i]] # split name into segments
   remID <- strsplit(namesorder, " ")[[i]][2:length(splitname)] # remove stock ID from name
   lab <- paste(remID, collapse = " ") # concat back together
@@ -1010,7 +1071,7 @@ tssprops <- tssSum_df3 %>%
   group_by(`Spatial Indicator`) %>% 
   distinct() %>%
   mutate(prop05tss = paste0(round(length(maxTSS[maxTSS>=0.5])/Nsurvs*100,1), "%"),
-         prop00tss = paste0(round(length(maxTSS[maxTSS>0])/Nsurvs*100,1), "% > 0.5")) %>%
+         prop00tss = paste0(round(length(maxTSS[maxTSS>0])/Nsurvs*100,1), "% > 0")) %>%
   select(-maxTSS) %>%
   distinct()
 
@@ -1018,6 +1079,7 @@ tssprops <- tssSum_df3 %>%
 tssSum_plot <- ggplot() +
   geom_col(data = tssSum_df3, aes(x = names, y = maxTSS, fill = StockID), position = position_dodge(width = 2), width = 0.8) +
   geom_text(data = tssprops, aes(x = length(unique(tssSum_df2$names))-2, y = 1, label = c(tssprops$prop05tss)), size = 3.3) +
+  scale_fill_manual(breaks = names(colrs), values = colrs) + 
   scale_x_discrete(labels = labels) +
   geom_hline(yintercept = c(0, 0.5), colour = "grey20", lty = 2) +
   facet_wrap(vars(factor(`Spatial Indicator`, levels = indorder))) +
@@ -1051,6 +1113,7 @@ tssSum_df4 <- tssSum_df2 %>%
 tssSum_plot2 <- ggplot() +
   geom_errorbar(data = tssSum_df4, aes(x = names, ymin = y0, ymax = y100), colour = "black", width = 0.5, key_glyph = "rect") +
   geom_boxplot(data = tssSum_df4, aes(x = names, ymin = y0, ymax = y100, lower = y25, upper = y75, middle = y50, fill = StockID),colour = "grey20", stat="identity", key_glyph = "rect") +
+  scale_fill_manual(breaks = names(colrs), values = colrs) + 
   geom_text(data = tssprops, aes(x = length(unique(tssSum_df2$names))-2, y = 1, label = c(tssprops$prop05tss)), size = 3.3) +
   facet_wrap(vars(factor(`Spatial Indicator`, levels = indorder))) +
   scale_x_discrete(labels = labels) +
@@ -1081,7 +1144,8 @@ dir.create(paste0(tssSum.plot.path, "allstocks"), recursive = TRUE)
 cowplot::save_plot(plot = tssSum_plot2, filename = paste0(tssSum.plot.path, "allstocks/tssSumPlot2.png"), base_height = 8, base_width = 12)
 
 tssSum_plot3 <- ggplot() +
-  geom_errorbar(data = tssSum_df4, aes(x = names, ymin = y0, ymax = y100, colour = StockID), width = 0.9, key_glyph = "rect", linewidth = 0.5) +
+  geom_errorbar(data = tssSum_df4, aes(x = names, ymin = y0, ymax = y100, colour = StockID), width = 0.9, key_glyph = "rect", linewidth = 1) +
+  scale_colour_manual(breaks = names(colrs), values = colrs) + 
   geom_text(data = tssprops, aes(x = length(unique(tssSum_df2$names))-2, y = 1, label = c(tssprops$prop05tss)), size = 3.3) +
   facet_wrap(vars(factor(`Spatial Indicator`, levels = indorder))) +
   scale_x_discrete(labels = labels) +
@@ -1169,7 +1233,7 @@ if(any(duplicated(optthreshdata[c(1:5)]))){
   pess3 <- optthreshdata3[duprowno3,]} else{message("All duplicates removed")}
 }
 optthreshdata <- optthreshdata3 %>% 
-  select(-maxTNR, -First, -TNR, -maxTSS, -FPR) %>%
+  select(-maxTNR, -TNR, -maxTSS, -FPR) %>%
   rename(OptThresh = `Spatial Indicator Value`, maxTSS = TSS)
 
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -1204,6 +1268,7 @@ stocklist.chr <- list("cod.27.47d20_nov", "had.27.46a20", "ple.27.420", "ple.27.
 
 #### 3. Plot ####
 for(i in 1:length(stocklist)){
+  tic()
   ##### 3.1 Filter to Stock ####
   # Select the stock to analyse
   stk <- stocklist[[i]]
@@ -1221,12 +1286,12 @@ for(i in 1:length(stocklist)){
   #### 3.2 Get SSB/MSY Btrigger ####
   writeLines("Get SSB for survey years")
   
-  strtyr <- min(sdistk_wide$Year)
+  strtyr <- min(sdistk_long$Year)
   if(strtyr < range(stk)["minyear"]){
     warning("First year of survey data provided preceeds first year of data in the stock object. Using minyear of the stock object instead.", immediate. = TRUE)
     strtyr <- range(stk)["minyear"]}
   
-  endyr <- max(sdistk_wide$Year)
+  endyr <- max(sdistk_long$Year)
   if(endyr > range(stk)["maxyear"]){
     warning("Last year of survey data provided exceeds available last year of data in the stock object. Using maxyear of the stock object instead.", immediate. = TRUE)
     endyr <- range(stk)["maxyear"]}  
@@ -1334,6 +1399,7 @@ for(i in 1:length(stocklist)){
   writeLines("Save")
   dir.create(paste0(si.plot.path, stk.chr))
   cowplot::save_plot(plot = optthresh_plot, filename = paste0(si.plot.path, stk.chr, "/OptSpatIndPlot-", stk.chr, ".png"), base_height = 25, base_width = 12)
+  toc()
 }
 
 ### J. Best Surveys ####
