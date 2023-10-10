@@ -1355,3 +1355,652 @@ spi$SPI[is.nan(spi$SPI)] <- 0 # change NaNs to 0
 
 plot(spi$Year, spi$SPI, type = "l", ylim=c(0,1))
 
+
+# CoG and Inertia variations ####
+# psuedo data
+x <- c(-10, 5, 9, -4, -3, 12, 16, 0, 4, 17, 15, 10, 12, 11)
+y <- c(50, 32, 46, 42, 59, 54, 39, 60, 46, 40, 43, 35, 40, 43)
+z <- c(1, 5, 10, 6, 2, 1, 1, 2, 7, 9, 1, 10, 12, 14)
+z <- c(1, 1, 20, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 14)
+
+
+# current Cog:
+cog <- function(x, y, z = 1, plot = FALSE, lonlat2km = FALSE, km2lonlat = FALSE){
+  # Equal density
+  if(length(z) == 1){
+    z <- rep(z, length(x))
+  }
+  # Coordinate conversion
+  if(lonlat2km){
+    xy <- SpatialEpi::latlong2grid(cbind(x,y))
+    d <- cbind(xy,z)
+  }else if(km2lonlat){
+    xy <- SpatialEpi::grid2latlong(cbind(x,y))
+    d <- cbind(xy,z)
+  } else{
+    d <- as.data.frame(cbind(x,y,z))
+  }
+  # Density weighted CoG, z=1 = equal weighting
+  cog_x <- sum(d$x*d$z)/sum(d$z)
+  cog_y <- sum(d$y*d$z)/sum(d$z)
+  cog_xy <- cbind(cog_x, cog_y)
+  
+  d <- as.data.frame(d)
+  cog_xy <- as.data.frame(cog_xy)
+
+  # Plot
+  if(plot){
+    if(length(unique(z))==1){
+      a = NULL
+    } else{
+      d$a <- d$z
+    }
+    p <- ggplot() +
+      geom_point(data = d, aes(x,y, colour = a), size = z) +
+      geom_point(data = cog_xy, aes(cog_x, cog_y), colour = "blue", shape = 15, size = 2) +
+      geom_text(data = cog_xy, aes(cog_x, cog_y-(cog_y*0.02), label = "CoG")) +
+      paletteer::scale_colour_paletteer_c("grDevices::Geyser") +
+      labs(colour = "z")
+    print(p)
+  }
+  
+  return(cog_xy)
+}
+
+cog(x,y,z, plot = T, lonlat2km = T, km2lonlat = F)
+
+# weighted inertia
+inertia <- function(x, y, z = 1, plot = FALSE, lonlat2km = FALSE, km2lonlat = FALSE, rand = FALSE){
+  
+  # Use rnorm generated data
+  if(missing(x) & missing(y) & rand == T){
+    x <- rnorm(50)
+    y <- rnorm(50)
+    z <- abs(rnorm(50)^2)
+  }
+  
+  # For equal weighting of xy points
+  if(length(z) == 1){
+    z <- rep(z, length(x))
+  }
+  
+  # Measurement transformation
+  if(lonlat2km){
+    xy <- SpatialEpi::latlong2grid(cbind(x,y))
+    d <- cbind(xy,z)
+  } else if(km2lonlat){
+    xy <- SpatialEpi::grid2latlong(cbind(x,y))
+    d <- cbind(xy,z)
+  } else{
+    d <- as.data.frame(cbind(x,y,z))
+  }
+  
+  # Density weighted CoG
+  cog_x <- sum(d$x*d$z)/sum(d$z)
+  cog_y <- sum(d$y*d$z)/sum(d$z)
+  cog_xy <- as.data.frame(cbind(cog_x, cog_y))
+  # Inertia
+  dx <- d$x - cog_x
+  dy <- d$y - cog_y
+  ix <- sum((dx^2)*d$z)/sum(d$z)
+  iy <- sum((dy^2)*d$z)/sum(d$z)
+  inert <- ix+iy
+  # Weighted PCA
+  M11 <- sum(dx^2*d$z)
+  M22 <- sum(dy^2*d$z)
+  M21 <- sum(dx*dy*d$z)
+  M12 <- M21
+  M <- matrix(c(M11, M12, M21, M22), ncol = 2)
+  x1 <- eigen(M)$vectors[1, 1]
+  y1 <- eigen(M)$vectors[2, 1]
+  x2 <- eigen(M)$vectors[1, 2]
+  y2 <- eigen(M)$vectors[2, 2]
+  r1 <- eigen(M)$values[1]/(eigen(M)$values[1] + eigen(M)$values[2])
+  # Principal axis coordinates
+  e1 <- (y1/x1)^2
+  sx1 <- x1/abs(x1)
+  sy1 <- y1/abs(y1)
+  sx2 <- x2/abs(x2)
+  sy2 <- y2/abs(y2)
+  xa <- cog_x + sx1 * sqrt((r1 * inert)/(1 + e1))
+  ya <- cog_y + sy1 * sqrt((r1 * inert)/(1 + (1/e1)))
+  xb <- 2 * cog_x - xa
+  yb <- 2 * cog_y - ya
+  xc <- cog_x + sx2 * sqrt(((1 - r1) * inert)/(1 + (1/e1)))
+  yc <- cog_y + sy2 * sqrt(((1 - r1) * inert)/(1 + e1))
+  xd <- 2 * cog_x - xc
+  yd <- 2 * cog_y - yc
+  Imax <- r1*inert 
+  Imin <- (1-r1)*inert
+  isotropy <- sqrt(Imin/Imax)
+  
+  # Plot
+  if(plot){
+    paletteer::scale_colour_paletteer_c("grDevices::Geyser")
+    pal <- paletteer::paletteer_c("grDevices::Geyser", length(d$x))
+    d <- d %>% arrange(z) %>%
+      mutate(pal = pal)
+    
+    par(pty = "s")
+    plot(d$x,d$y, cex = d$z, col = d$pal, pch = 16)
+    segments(xa,ya,xb,yb, col = "blue")
+    segments(xc,yc,xd,yd, col = "blue")
+    points(cog_x, cog_y, col = "blue", pch = 15)
+    ell <- car::dataEllipse(c(xa,xb,xc,xd),c(ya,yb,yc,yd), 
+                            levels = 0.455, add = TRUE, plot.points = F, 
+                            center.pch = FALSE, col = "lightblue",
+                            fill = TRUE)
+    points(xa,ya, col = "blue", cex = 1, pch = 16)
+    points(xb,yb, col = "blue", cex = 1, pch = 16)
+    points(xc,yc, col = "blue", cex = 1, pch = 16)
+    points(xd,yd, col = "blue", cex = 1, pch = 16)
+    text(x = median(d$x), y = max(d$y), labels = paste0("CoG: ", round(cog_x, 2), ", ", round(cog_y, 2)))
+    text(x = median(d$x), y = max(d$y)*0.9, labels = paste0("Inertia: ", round(inert, 2)))
+    text(x = median(d$x), y = max(d$y)*0.8, labels = paste0("Isotropy: ", round(isotropy, 2)))
+  }
+
+  output <- as.data.frame(cbind(cog_xy, inert, isotropy))
+  return(output)
+}
+
+i <- inertia(x,y,z, rand = F, plot = T, lonlat2km = F)
+
+x <- xa
+y <- yb
+h <- cog_x
+k <- cog_y
+xh2 <- ((x-h)^2)/a^2
+yk2 <- ((y-k)^2)/b^2
+
+
+
+
+cog_x <- i$cog_x
+cog_y <- i$cog_y
+
+
+ellBase <- cbind(sqrt(eigen(M)$values[1])*cos(angles), sqrt(eigen(M)$values[2])*sin(angles)) # normal ellipse
+ellRot  <- eigen(M)$vectors %*% t(ellBase) 
+
+
+
+
+a       <- sqrt(((xa-cog_x)^2) + ((ya-cog_y)^2))
+b       <- sqrt(((xb-cog_x)^2) + ((yb-cog_y)^2))
+area    <- pi*a*b
+
+
+
+ctr <- c(i$cog_x, i$cog_y)
+A <- cov(cbind(x, y))
+angles <- seq(0, 2*pi, length.out=200)          # angles for ellipse
+
+
+
+eigVal  <- eigen(A)$values
+eigVec  <- eigen(A)$vectors
+eigScl  <- eigVec %*% diag(sqrt(eigVal))  # scale eigenvectors to length = square-root
+xMat    <- rbind(ctr[1] + eigScl[1, ], ctr[1] - eigScl[1, ])
+yMat    <- rbind(ctr[2] + eigScl[2, ], ctr[2] - eigScl[2, ])
+a       <- sqrt((xMat[1,1]-cog_x)^2 + (yMat[1,1]-cog_y)^2)
+b       <- sqrt((xMat[2,2]-cog_x)^2 + (yMat[2,2]-cog_y)^2)
+area    <- pi*a*b
+
+ellBase <- cbind(sqrt(eigVal[1])*cos(angles), sqrt(eigVal[2])*sin(angles)) # normal ellipse
+ellRot  <- eigVec %*% t(ellBase)                                          # rotated ellipse
+#plot((ellRot+ctr)[1, ], (ellRot+ctr)[2, ], asp=1, type="l", lwd=2)
+plot(x,y, cex = z)
+matlines(xMat, yMat, lty=1, lwd=2, col="green")
+points(cog_x, cog_y, col = "blue", pch = 15)
+points((ellRot+ctr)[1, ], (ellRot+ctr)[2, ], asp=1, type="l", lwd=2)
+
+points(ctr[1], ctr[2], pch=4, col="red", lwd=3)
+points(x,y)
+
+
+  
+  plotG <- ggplot() +
+    geom_point(data = d, aes(x,y),size = z) +
+    #geom_point(data = cogw, aes(V1, V2), colour = "red") +
+    geom_point(data = cogs, aes(V1, V2), colour = "blue") +
+    stat_ellipse(data = d, aes(x = sum(((x-cg_x)^2)*z)/sum(z), y = sum(((y-cg_y)^2)*z)/sum(z)), type = "t")  # inertia
+  print(plotG)
+}
+inertia2.1(x,y,z)
+
+data.pca <- prcomp(d[,1:2], cor = TRUE)
+
+g <- ggbiplot(data.pca, obs.scale = 1, var.scale = 1, ellipse = TRUE, circle = TRUE)
+g <- g + scale_color_discrete(name = '')
+g <- g + theme(legend.direction = 'horizontal', 
+               legend.position = 'top')
+print(g)
+
+xw <- x*z/sum(z)
+yw <- y*z/sum(z)
+cov_matrix <- cov(cbind(xw, yw))
+eigen_result <- eigen(cov_matrix)
+eigenvalues <- eigen_result$values
+
+
+# Create a sample square matrix
+A <- matrix(cbind(x, y))
+
+# Calculate eigenvalues and eigenvectors
+eigen_result <- eigen(A)
+eigenvalues <- eigen_result$values
+eigenvectors <- eigen_result$vectors
+
+# Create a scatterplot
+plot(0,0, type = "n", xlab = "X", ylab = "Y")
+
+# Plot eigenvectors as arrows
+arrows(cg_x, cg_y, eigenvectors[1, 1], eigenvectors[2, 1], col = "blue", length = 0.1)
+arrows(cg_x, cg_y, eigenvectors[1, 2], eigenvectors[2, 2], col = "red", length = 0.1)
+points(x,y)
+
+
+# get filtered survey data
+
+z = FALSE; plot = FALSE; lonlat2km = FALSE; km2lonlat = FALSE; rand = FALSE
+data <- filtersurveydata(hlhh, yrs, qrs,species_aphia, stk_divs)
+
+foo <- function(hlhh, yrs, qrs, species_aphia, stk_divs, # data specifics
+                cog = T, inertia = T, iso = T,           # spatial indicators
+                plot = F,                                # plot
+                density = F,                             # density weighted spat inds
+                lonlat2km = F, km2lonlat = F){           # conversion of lonlats to/from km
+  
+  yrs <- as.numeric(yrs)
+  qrs <- as.numeric(qrs)
+  d2 <- hlhh %>%
+    filter(Area_27 %in% stk_divs,
+           Year %in% c(yrs),
+           Quarter %in% c(qrs),
+           HaulVal != "I")
+  # Check what data is available
+  if(!identical(as.numeric(unique(d2$Quarter)), qrs)){
+    warning(paste0("Data not found in all survey quarters provided. 
+  ", "Only data for quarters ", paste(sort(unique(d2$Quarter)), collapse = ", ")), " available in ", unique(hlhh$Survey.x), " survey data (years ", min(yrs), ":", max(yrs), "), region(s) ", stk_divs, ".
+  ", "No data for quarter ", paste(c(setdiff(qrs, unique(d2$Quarter)), setdiff(unique(d2$Quarter), qrs)), collapse = ", "), "\n", immediate. = TRUE)
+  }
+  if(!identical(as.numeric(sort(unique(d2$Year))), yrs)){
+    warning(paste0("Species not found in all survey years provided. 
+  ", "No data for years ", paste(c(setdiff(yrs, unique(d2$Year)), setdiff(unique(d2$Year), yrs)), collapse = ", "), " in ", unique(hlhh$Survey.x), " survey data (quarters ", paste(sort(unique(d2$Quarter)), collapse = ", "), "), region(s) ", stk_divs, ".\n"), immediate. = TRUE)
+  }
+  d1 <- d2 %>% 
+    filter(Valid_Aphia == species_aphia) %>%
+    distinct() %>%
+    mutate(TotalNo_Dur = TotalNo/HaulDur)
+  
+  df <- data.frame()
+  
+  for(yr in yrs){
+    dyrly <- d1 %>%
+      filter(Year == yr)
+    x <- dyrly$ShootLong
+    y <- dyrly$ShootLat
+    # Density
+    if(density == TRUE){
+    z <- dyrly$TotalNo_Dur
+    } else{z <- rep(1, length(x))}
+  
+    # Measurement transformation
+    if(lonlat2km){
+      xy <- SpatialEpi::latlong2grid(cbind(x,y))
+      d <- cbind(xy,z)
+    } else if(km2lonlat){
+      xy <- SpatialEpi::grid2latlong(cbind(x,y))
+      d <- cbind(xy,z)
+    } else{
+      d <- as.data.frame(cbind(x,y,z))
+    }
+    # Density weighted CoG
+    cog_x <- sum(d$x*d$z)/sum(d$z)
+    cog_y <- sum(d$y*d$z)/sum(d$z)
+    cog_xy <- as.data.frame(cbind(cog_x, cog_y))
+    
+    if(any(is.na(cog_xy)) & inertia == TRUE){
+      inert <- NaN
+    } else if(any(is.na(cog_xy)) & isotropy == TRUE){
+      isotropy = NaN
+    } else{
+      # Inertia
+      dx <- d$x - cog_x
+      dy <- d$y - cog_y
+      ix <- sum((dx^2)*d$z)/sum(d$z)
+      iy <- sum((dy^2)*d$z)/sum(d$z)
+      inert <- ix+iy
+      # Weighted PCA
+      M11 <- sum(dx^2*d$z)
+      M22 <- sum(dy^2*d$z)
+      M21 <- sum(dx*dy*d$z)
+      M12 <- M21
+      M <- matrix(c(M11, M12, M21, M22), ncol = 2)
+      x1 <- eigen(M)$vectors[1, 1]
+      y1 <- eigen(M)$vectors[2, 1]
+      x2 <- eigen(M)$vectors[1, 2]
+      y2 <- eigen(M)$vectors[2, 2]
+      r1 <- eigen(M)$values[1]/(eigen(M)$values[1] + eigen(M)$values[2])
+      # Principal axis coordinates
+      e1 <- (y1/x1)^2
+      sx1 <- x1/abs(x1)
+      sy1 <- y1/abs(y1)
+      sx2 <- x2/abs(x2)
+      sy2 <- y2/abs(y2)
+      xa <- cog_x + sx1 * sqrt((r1 * inert)/(1 + e1))
+      ya <- cog_y + sy1 * sqrt((r1 * inert)/(1 + (1/e1)))
+      xb <- 2 * cog_x - xa
+      yb <- 2 * cog_y - ya
+      xc <- cog_x + sx2 * sqrt(((1 - r1) * inert)/(1 + (1/e1)))
+      yc <- cog_y + sy2 * sqrt(((1 - r1) * inert)/(1 + e1))
+      xd <- 2 * cog_x - xc
+      yd <- 2 * cog_y - yc
+      Imax <- r1*inert 
+      Imin <- (1-r1)*inert
+      isotropy <- sqrt(Imin/Imax)
+      
+      # Plot
+      if(plot){
+        pal <- paletteer::paletteer_c("grDevices::Geyser", length(d$x))
+        dplot <- d %>% arrange(z) %>%
+          mutate(pal = pal)
+        posy <- jitter(cog_y)
+        
+        par(pty = "s")
+        plot(dplot$x,dplot$y, cex = dplot$z, col = dplot$pal, pch = 16)
+        segments(xa,ya,xb,yb, col = "blue")
+        segments(xc,yc,xd,yd, col = "blue")
+        points(cog_x, cog_y, col = "blue", pch = 15)
+        ell <- car::dataEllipse(c(xa,xb,xc,xd),c(ya,yb,yc,yd), 
+                                levels = 0.455, add = TRUE, plot.points = F, 
+                                center.pch = FALSE, col = "lightblue",
+                                fill = TRUE)
+        points(xa,ya, col = "blue", cex = 1, pch = 16)
+        points(xb,yb, col = "blue", cex = 1, pch = 16)
+        points(xc,yc, col = "blue", cex = 1, pch = 16)
+        points(xd,yd, col = "blue", cex = 1, pch = 16)
+        
+        text(x = cog_x, y = posy, labels = paste0("CoG: ", round(cog_x, 2), ", ", round(cog_y, 2)))
+        text(x = cog_x, y = posy*0.995, labels = paste0("Inertia: ", round(inert, 2)))
+        text(x = cog_x, y = posy*0.99, labels = paste0("Isotropy: ", round(isotropy, 2)))
+        title(sub = yr)
+      }
+    }
+  output <- as.data.frame(cbind(yr, cog_xy, inert, isotropy))
+  df <- rbind(df, output)
+  }
+  df <- df[,c(TRUE, rep(cog, 2), inertia, iso)]
+  df <- df %>%
+    rename("Year" = yr) %>%
+    mutate(Quarter = paste(sort(unique(d2$Quarter)), collapse = ", ")) %>%
+    relocate(Year, Quarter)
+  return(df)
+}
+
+hlhh <- stk_data_filtered$`BTS Q3`$BTS$hlhh
+hh <- stk_data_filtered[[indx]][[survey]]$hh
+yrs <- unique(hlhh$Year)[unique(hlhh$Year) < 2022] # make sure max does not exceed max year in 2022 stock assessment 
+qrs <- unique(hlhh$Quarter)
+species_aphia <- 127136 #witch
+stk_divs <- c("4.a","4.b","4.c","3.a.20","3.a.21","7.d")
+
+test 
+  foo(hlhh, yrs, qrs, species_aphia, stk_divs, 
+            cog = T,
+            inertia = T,
+            iso = T,
+            density = T, 
+            lonlat2km = T, 
+            plot = F)
+
+
+
+
+plot(test$Year, test$cog_x, type = "l")
+plot(test$Year, test$cog_y, type = "l")
+plot(test$Year, test$inert, type = "l")
+plot(test$Year, test$isotropy, type = "l")
+
+
+#### Plot PA ####
+library(ggplot2)
+library(beepr)
+library(patchwork)
+library(scales)
+mappa <- function(hlhh, yrs, qrs, species_aphia, stk_divs, ices_rect, ices_divs, scale_dens = F, return = T, save = F, path = NULL){
+  
+  yrs <- as.numeric(yrs)
+  qrs <- as.numeric(qrs)
+  # Dataset for all surveys sites within stock region
+  d2 <- hlhh %>%
+    filter(Area_27 %in% stk_divs,
+           Year %in% c(yrs),
+           Quarter %in% c(qrs),
+           HaulVal != "I")
+  # Check what data is available
+  if(!identical(as.numeric(unique(d2$Quarter)), qrs)){
+    warning(paste0("Data not found in all survey quarters provided. 
+  ", "Only data for quarters ", paste(sort(unique(d2$Quarter)), collapse = ", ")), " available in ", unique(hlhh$Survey.x), " survey data (years ", min(yrs), ":", max(yrs), "), region(s) ", stk_divs, ".
+  ", "No data for quarter ", paste(c(setdiff(qrs, unique(d2$Quarter)), setdiff(unique(d2$Quarter), qrs)), collapse = ", "), "\n", immediate. = TRUE)
+  }
+  if(!identical(as.numeric(sort(unique(d2$Year))), yrs)){
+    warning(paste0("Species not found in all survey years provided. 
+  ", "No data for years ", paste(c(setdiff(yrs, unique(d2$Year)), setdiff(unique(d2$Year), yrs)), collapse = ", "), " in ", unique(hlhh$Survey.x), " survey data (quarters ", paste(sort(unique(d2$Quarter)), collapse = ", "), "), region(s) ", stk_divs, ".\n"), immediate. = TRUE)
+  }
+  # Dataset for positive surveys sites within stock region
+  d1 <- d2 %>% 
+    filter(Valid_Aphia == species_aphia) %>%
+    distinct() %>%
+    mutate(TotalNo_Dur = TotalNo/HaulDur)
+
+  
+  ### An empty plot to create white space - think of more efficient way
+  empty <- ggplot()+geom_point(aes(1,1), colour="white")+
+    theme(axis.ticks=element_blank(), 
+          panel.background=element_blank(), 
+          axis.text.x=element_blank(), axis.text.y=element_blank(),           
+          axis.title.x=element_blank(), axis.title.y=element_blank())
+  
+  # plot occurrence and all survey sites for each year (quarters grouped)
+  ## 2019 has no data --- is this correct?
+  for(yr in yrs){
+    # yr <- year
+    message(paste("Mapping occupancy in year", yr, "for", species))
+    
+    message("1. Prep")
+    rangex <- c(min(hlhh$ShootLong), max(hlhh$ShootLong))
+    rangey <- c(min(hlhh$ShootLat), max(hlhh$ShootLat))
+    
+    # datasets for all surveys and survey with species presence
+    #data_ab <- subset(survey_data, survey_data$Year == yr)
+    #data_occ <- subset(species_data, species_data$Year == yr)
+    
+    # mean survey location and means survey location with species presence
+    #cg <- data.frame(type = c("survey", "presence"),
+    #                 lon = c(mean(data_ab$ShootLong), mean(data_occ$ShootLong)),
+    #                 lat = c(mean(data_ab$ShootLat), mean(data_occ$ShootLat)))
+    message("2. Main map plot")
+    ########## start the plot ##############
+    survey_plot <- ggplot() +
+      ##########  spatial info  ##############
+    # ICES rectangles
+    geom_tile(data = ices_rect, mapping = aes(x = stat_x, y = stat_y), fill = NA, colour = "darkgrey") +
+      # ICES Divisions
+      geom_path(data = ices_divs, mapping = aes(x = long, y = lat, group = group, fill = NULL), color = "black") +
+      coord_cartesian(xlim = rangex, ylim = rangey, expand = F) +
+      
+      # World map
+      borders("world", fill = "grey", colour = "black") +
+      # coord_quickmap(xlim = rangex, ylim = rangey) +
+      ########## add scatter #############
+    # surveys
+    geom_point(data = d2, aes(ShootLong, ShootLat), 
+               size = 0.5, colour = "red3", alpha = 0.5) +
+      # surveys with species presence
+      geom_point(data = d1, aes(ShootLong, ShootLat), 
+                 size = 0.5, colour = "cyan3") +
+      # marginal distribution - not needed anymore, CDF 
+      # geom_rug(data = data_ab, aes(lon, lat), col = "blue", alpha = 0.1, sides = "tr") + 
+      # geom_rug(data = data_occ, aes(lon, lat), col = "red", alpha = 0.1, sides = "tr") +
+      ######### mean location ###########
+    
+      ######### formatting ############
+    guides(colour = "none", fill = "none") +
+      labs( x = "", y = "") +
+      theme(
+        panel.background = element_rect(fill = "white"),
+        panel.grid.major = element_line(colour = NA),
+        panel.grid.minor = element_line(colour = NA),
+        plot.title = element_text(size = 8))
+    
+    ################################
+    ################################
+    ######## density plots #########
+    ################################
+    ################################
+    if(scale_dens == TRUE){
+      ### longitudinal distribution
+      message("3. Longitude marginal density plot")
+      denstop <- ggplot() + 
+        geom_density(data = d2, aes(x = ShootLong, y = after_stat(scaled), fill = "Presence"), alpha = 0.4) +
+        geom_density(data = d1, aes(x = ShootLong,  y = after_stat(scaled), fill = "Survey"), alpha = 0.4) +
+        #geom_vline(data = cg[1,2:3], aes(xintercept = lon), col = "blue", lty = 2) +
+        #geom_vline(data = cg[2,2:3], aes(xintercept = lon), col = "red", lty = 2) +
+        xlim(rangex) +
+        theme_void() +
+        guides(fill = "none") +
+        labs(title = paste0("NS-IBTS ", species, " Presence-Absence in ", yr, " Q1 & Q3")) +
+        theme(plot.title = element_text(hjust = 0, vjust = 15, size = 10))
+      
+      ### latitudinal distribution
+      message("4. Latitude marginal density plot")
+      
+      densrigh <- ggplot() + 
+        geom_density(data = d2, aes(x = ShootLat, y = after_stat(scaled), fill = "Presence"), alpha = 0.4) +
+        geom_density(data = d1, aes(x = ShootLat, y = after_stat(scaled),  fill = "Survey"), alpha = 0.4) +
+        #geom_vline(data = cg[1,2:3], aes(xintercept = lat), col = "blue", lty = 2) +
+        #geom_vline(data = cg[2,2:3], aes(xintercept = lat), col = "red", lty = 2) +
+        xlim(rangey) +
+        theme_void() + 
+        coord_flip() +
+        theme(legend.key.size = unit(0.2, "cm"),
+              legend.title = element_blank(),
+              legend.position = c(0.45,1.075),
+              legend.text = element_text(size = 8))
+      
+      ### arrange the plot
+      
+    } else{
+      ### longitudinal distribution
+      message("3. Longitude marginal density plot")
+      denstop <- ggplot() + 
+        geom_density(data = d2, aes(x = ShootLong, fill = "Presence"), alpha = 0.4) +
+        geom_density(data = d1, aes(x = ShootLong,  fill = "Survey"), alpha = 0.4) +
+        #geom_vline(data = cg[1,2:3], aes(xintercept = lon), col = "blue", lty = 2) +
+        #geom_vline(data = cg[2,2:3], aes(xintercept = lon), col = "red", lty = 2) +
+        xlim(rangex) +
+        theme_void() +
+        guides(fill = "none") +
+        labs(title = paste0("NS-IBTS ", species, " Presence-Absence in ", yr, " Q1 & Q3")) +
+        theme(plot.title = element_text(hjust = 0, vjust = 15, size = 10))
+      
+      ### latitudinal distribution
+      message("4. Latitude marginal density plot")
+      
+      densrigh <- ggplot() + 
+        geom_density(data = d2, aes(x = ShootLat, fill = "Presence"), alpha = 0.4) +
+        geom_density(data = d1, aes(x = ShootLat, fill = "Survey"), alpha = 0.4) +
+        #geom_vline(data = cg[1,2:3], aes(xintercept = lat), col = "blue", lty = 2) +
+        #geom_vline(data = cg[2,2:3], aes(xintercept = lat), col = "red", lty = 2) +
+        xlim(rangey) +
+        theme_void() + 
+        coord_flip() +
+        theme(legend.key.size = unit(0.2, "cm"),
+              legend.title = element_blank(),
+              legend.position = c(0.45,1.075),
+              legend.text = element_text(size = 8))
+      
+      ### arrange the plot
+      message("5. Arranging plot")
+    }
+    
+    sp <- plot_spacer() +
+      plot_spacer() +
+      plot_spacer() +
+      denstop +   # tl
+      plot_spacer() + # mr
+      plot_spacer() + # tr
+      survey_plot +   # bl
+      densrigh +      # mr
+      plot_spacer() + # br
+      plot_layout(
+        ncol = 3, 
+        nrow = 3, 
+        widths  = c(2, 0.5, 1),
+        heights = c(0.2, 0.2, 2, 0.5))
+    
+    if(save == TRUE & !(is.null(path))){
+      ggsave(sp, filename = paste0(path, "/NS-IBTS/", species, "/1. ", species, " P-A/NS-IBTS_", species, "_PA_", yr, "_Q1_Q3.png"),
+             width = 7, height = 6)}
+    beep(1)
+    
+    if(return == TRUE){
+      return(sp)}
+  }
+}
+
+
+#### Ellipse Area ####
+
+ellipsearea <- function(hlhh, yrs, qrs, species_aphia, stk_divs){
+  yrs <- as.numeric(yrs)
+  qrs <- as.numeric(qrs)
+  d2 <- hlhh %>%
+    filter(Area_27 %in% stk_divs,
+           Year %in% c(yrs),
+           Quarter %in% c(qrs),
+           HaulVal != "I", 
+           Valid_Aphia == species_aphia) %>%
+    distinct()
+  
+  # Check what data is available
+  if(!identical(as.numeric(unique(d2$Quarter)), qrs)){
+    warning(paste0("Data not found in all survey quarters provided. 
+    ", "Only data for quarters ", paste(sort(unique(d2$Quarter)), collapse = ", ")), " available in ", unique(hlhh$Survey.x), " survey data (years ", min(yrs), ":", max(yrs), "), region(s) ", paste0(stk_divs, collapse = ", "), ".
+    ", "No data for quarter ", paste(c(setdiff(qrs, unique(d2$Quarter)), setdiff(unique(d2$Quarter), qrs)), collapse = ", "), "\n", immediate. = TRUE)
+  }
+  if(!identical(as.numeric(sort(unique(d2$Year))), yrs)){
+    warning(paste0("Species not found in all survey years provided. 
+    ", "No data for years ", paste(c(setdiff(yrs, unique(d2$Year)), setdiff(unique(d2$Year), yrs)), collapse = ", "), " in ", unique(hlhh$Survey.x), " survey data (quarters ", paste(sort(unique(d2$Quarter)), collapse = ", "), "), region(s) ", paste0(stk_divs, collapse = ", "), ".\n"), immediate. = TRUE)
+  }
+
+  df <- data.frame()
+  
+  for(yr in yrs){
+    data <- data.frame(x = d2[d2$Year == yr,]$ShootLong, 
+                       y = d2[d2$Year == yr,]$ShootLat)
+    
+    p <- ggplot(data, aes(x = x, y = y)) +
+      geom_point() +
+      stat_ellipse(type = "t")
+    
+    pb <- ggplot_build(p)
+    if(nrow(pb$data[[1]]) == 0){
+      ela <- 0
+    } else{
+      el <- pb$data[[2]][c("x", "y")]
+      ctr <- MASS::cov.trob(data)$center #updated previous answer here
+      dist2center <- sqrt(rowSums((t(t(el) - ctr))^2))
+      ela <- pi * min(dist2center) * max(dist2center)
+      }
+    output <- cbind("Year" = yr, "Ellipse Area" = ela)
+    df <- rbind(df, output)
+  }
+  df <- df %>%
+    mutate(Quarter = paste(sort(unique(hlhh$Quarter)), collapse = ", ")) %>%
+    relocate(Year, Quarter,`Ellipse Area`)
+  return(df)
+}
+
+
