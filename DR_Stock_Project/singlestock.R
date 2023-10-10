@@ -238,8 +238,6 @@ library(RColorBrewer)
 library(paletteer)
 
 colrs <- c("blue4", "#00695C", "#8BC34A", "gold2", "#E78100FF", "#F5191CFF", "#9C27B0") # "#FFD320", 
-#colrs <- paletteer_c("grDevices::Zissou 1", 6)
-#colrs <- paletteer_c("ggthemes::Temperature Diverging", 6)
 names(colrs) <- survorder
 
 # 3. Calculate Spatial Indicators ####
@@ -442,15 +440,15 @@ for(IndexFolder in names(stk_data_filtered)){
     si_file <- list.files(paste0(si.data.path, "/", IndexFolder, "/", SurveyFolder, "/SpatIndData/"), pattern = "*SpatIndData*")
     load(paste0(si.data.path, "/", IndexFolder, "/", SurveyFolder, "/SpatIndData/", si_file))
     si$Inertia <- si$Inertia/1000000
-    colnames(si)[colnames(si)=="Inertia"] <- "Inertia (million)"
+    #colnames(si)[colnames(si)=="Inertia"] <- "Inertia (million)"
     sdi_widelist[[i]] <- si
     #  Convert wide to long 
     si_long <- si %>% tidyr::pivot_longer(cols = sort(c("Gini Index", "D95", "Positive Area (Rectangle)", "Positive Area (Haul)", "SPI", "Spreading Area", "Equivalent Area",
-                                                        "CoG (x)","CoG (y)", "Inertia (million)", "Ellipse Area", "Convex Hull Area")), 
+                                                        "CoG (x)","CoG (y)", "Inertia", "Ellipse Area", "Convex Hull Area")), 
                                           names_to = "Spatial Indicator",
                                           values_to = "Spatial Indicator Value")
     si_long$`Spatial Indicator` <- factor(si_long$`Spatial Indicator`, levels = sort(c("Gini Index", "D95", "Positive Area (Haul)", "Positive Area (Rectangle)", "SPI", 
-                                                                                       "Spreading Area", "Equivalent Area", "CoG (x)","CoG (y)", "Inertia (million)", 
+                                                                                       "Spreading Area", "Equivalent Area", "CoG (x)","CoG (y)", "Inertia", 
                                                                                        "Ellipse Area", "Convex Hull Area"))) # factor & relocate
     sdi_longlist[[i]] <- si_long
     i <- i + 1
@@ -465,7 +463,7 @@ sdistk_long$`Survey Index, Survey Name` <- paste0(sdistk_long$SurveyIndex, ", ",
 sdistk_wide$`Survey Index, Survey Name` <- paste0(sdistk_wide$SurveyIndex, ", ", sdistk_wide$Survey)
 
 ### Order Indicators ####
-indorder <- c("CoG (x)", "CoG (y)", "Inertia (million)", 
+indorder <- c("CoG (x)", "CoG (y)", "Inertia", 
               "Gini Index", "D95", "Spreading Area", 
               "Equivalent Area", "SPI", "Positive Area (Rectangle)", 
               "Positive Area (Haul)", "Convex Hull Area", "Ellipse Area")
@@ -484,7 +482,6 @@ if(endyr > range(stk)["maxyear"]){
 stkssb <- as.data.frame(ssb(stk)[,ac(strtyr:endyr)])[c("year", "data")] %>%
   rename(Year = year, SSB = data) %>%
   mutate(type = "SSB") # for facet plot
-head(stkssb)
 
 ## 4.4 Plot SSB ####
 ssb_plot <- ggplot() + geom_line(data = stkssb, aes(x = Year, y = SSB/1000000), colour = "black") +
@@ -574,7 +571,7 @@ sdistk_wide <- merge(sdistk_wide, stkssb, by = "Year") %>%
 ### 5.4.1 Set Parameters ####
 state <- "ssb.msybtrig"
 inds <- c("Gini Index", "D95", "Positive Area (Haul)", "Positive Area (Rectangle)", 
-          "SPI", "Spreading Area", "Equivalent Area", "CoG (x)", "CoG (y)", "Inertia (million)",
+          "SPI", "Spreading Area", "Equivalent Area", "CoG (x)", "CoG (y)", "Inertia",
           "Ellipse Area", "Convex Hull Area")
 roc_longlist <- list()
 ### 5.4.2 For each survey... ####
@@ -860,7 +857,7 @@ sdistk_stndrd$`Spatial Indicator Value/OptThresh` <- sdistk_stndrd$`Spatial Indi
 head(sdistk_stndrd)
 
 ## 10.2 Get SSB/MSY Btrigger ####
-strtyr <- min(sdistk_wide$Year)
+strtyr <- min(sdistk_long$Year)
 if(strtyr < range(stk)["minyear"]){
   warning("First year of survey data provided preceeds first year of data in the stock object. Using minyear of the stock object instead.", immediate. = TRUE)
   strtyr <- range(stk)["minyear"]}
@@ -989,7 +986,7 @@ for(i in 1:nrow(bestsurveys)){
 }
 
 type <- "BestSurveys" # this changes where the filtered analysis is saved so analysis with allsurveys is not overwritten
-stk_data_filtered <- srvsfilt # now go through section 3 to 10
+#stk_data_filtered <- srvsfilt # now go through section 3 to 10
 # NOTE: Analysis must be run with all surveys first
 
 
