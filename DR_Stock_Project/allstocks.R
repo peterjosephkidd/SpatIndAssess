@@ -355,7 +355,7 @@ for(i in 1:length(stocklist)){
       D95 <- D95
       np.hauls <- np.hauls[c("Year", "Quarter", "PosAreaH")]
       np.rects <- np.rects[c("Year", "Quarter", "PosAreaR")]
-      SPI <- SPI[c("Year", "Quarter", "SPI")]
+      SPI <- SPI[c("Year", "Quarter", "SPI.dur")]
       sa <- sa
       ea <- ea
       cog <- cog
@@ -369,7 +369,8 @@ for(i in 1:length(stocklist)){
       si <- si %>%
         rename("Positive Area (Haul)" = PosAreaH,
                "Positive Area (Rectangle)" = PosAreaR,
-               "Convex Hull Area" = areaoccupied) %>%
+               "Convex Hull Area" = areaoccupied,
+               "SPI" = SPI.dur) %>%
         mutate(SurveyIndex = names(stk_data_filtered[indx]),
                Survey = names(stk_data_filtered[[indx]][survey]),
                StockID = stk.chr) %>%
@@ -1283,15 +1284,52 @@ for(i in 1:length(stocklist)){
   sdistk_wide <- filter(sdiall_wide, StockID == stk.chr)
   sdistk_stndrd <- filter(sdiall_stndrd, StockID == stk.chr)
   
+  # filter survey coverage data to stock
+  scov <- filter(meanrects, StockID == stk.chr)
+  # order surveys by coverage for plot legend
+  survorder <- arrange(scov, desc(SurvCoverage))$`Survey Index, Survey Name`
+  sdistk_stndrd$`Survey Index, Survey Name` <- factor(sdistk_stndrd$`Survey Index, Survey Name`, levels=survorder)
+  #rocAll_long$`Survey Index, Survey Name` <- factor(rocAll_long$`Survey Index, Survey Name`, levels=survorder)
+  # colours for surveys (cool = higher survey coverage)
+  colrs <- c("blue4", "#00695C", "#8BC34A", "gold2", "#E78100FF", "#F5191CFF", "#9C27B0") # "#FFD320", 
+  names(colrs) <- survorder
+  # order surveys by coverage
+  #sdistk_stndrd$`Survey Index, Survey Name` <- factor(sdistk_stndrd$`Survey Index, Survey Name`, levels=survorder)
+  
+  ####3.3 Best Surveys ####
+  if(type == "BestSurveys"){
+    stkbestsurveys <- filter(bestsurveys, StockID == stk.chr)
+    # Filter out surveys that do not have at least 25% coverage
+    sdistk_stndrd <- filter(sdistk_stndrd, 
+                            StockID %in% stkbestsurveys$StockID,
+                            SurveyIndex %in% stkbestsurveys$SurveyIndex,
+                            Survey %in% stkbestsurveys$SurveyName,
+                            `Survey Index, Survey Name` %in% stkbestsurveys$`Survey Index, Survey Name`)
+    # Remove CoG (add other inds if desired)
+    sdistk_stndrd[sdistk_stndrd$`Spatial Indicator` == "CoG (x)" | 
+                    sdistk_stndrd$`Spatial Indicator` == "CoG (y)",]$`Spatial Indicator Value` <- NaN
+    ## 10.0 Remove Inds < 0.5 TSS ####
+    sdistk_stndrd[sdistk_stndrd$maxTSS < 0.5 & !is.na(sdistk_stndrd$maxTSS),]$`Spatial Indicator Value/OptThresh` <- NaN
+    # Keep colours consistent between allsurvey plots and bestsurevy plots
+    b <- paste0(stkbestsurveys$SurveyIndex, ", ", stkbestsurveys$SurveyName)
+    colrs <- colrs[b]
+  }
+  if(nrow(sdistk_stndrd) == 0){
+    next
+  }
+  
+  # Filter years so that the years in the spatind plot do not predate the ssb plot
+  sdistk_stndrd <- sdistk_stndrd %>% filter(Year %in% stkssb$Year)
+  
   #### 3.2 Get SSB/MSY Btrigger ####
   writeLines("Get SSB for survey years")
   
-  strtyr <- min(sdistk_long$Year)
+  strtyr <- min(sdistk_stndrd$Year)
   if(strtyr < range(stk)["minyear"]){
     warning("First year of survey data provided preceeds first year of data in the stock object. Using minyear of the stock object instead.", immediate. = TRUE)
     strtyr <- range(stk)["minyear"]}
   
-  endyr <- max(sdistk_long$Year)
+  endyr <- max(sdistk_stndrd$Year)
   if(endyr > range(stk)["maxyear"]){
     warning("Last year of survey data provided exceeds available last year of data in the stock object. Using maxyear of the stock object instead.", immediate. = TRUE)
     endyr <- range(stk)["maxyear"]}  
@@ -1321,42 +1359,6 @@ for(i in 1:length(stocklist)){
     ylab("SSB/MSY Btrigger") +
     facet_wrap(vars(`type`))
   
-  # filter survey coverage data to stock
-  scov <- filter(meanrects, StockID == stk.chr)
-  # order surveys by coverage for plot legend
-  survorder <- arrange(scov, desc(SurvCoverage))$`Survey Index, Survey Name`
-  sdistk_stndrd$`Survey Index, Survey Name` <- factor(sdistk_stndrd$`Survey Index, Survey Name`, levels=survorder)
-  #rocAll_long$`Survey Index, Survey Name` <- factor(rocAll_long$`Survey Index, Survey Name`, levels=survorder)
-  # colours for surveys (cool = higher survey coverage)
-  colrs <- c("blue4", "#00695C", "#8BC34A", "gold2", "#E78100FF", "#F5191CFF", "#9C27B0") # "#FFD320", 
-  names(colrs) <- survorder
-  # order surveys by coverage
-  #sdistk_stndrd$`Survey Index, Survey Name` <- factor(sdistk_stndrd$`Survey Index, Survey Name`, levels=survorder)
-  
-  ####3.3 Best Surveys ####
-  if(type == "BestSurveys"){
-    stkbestsurveys <- filter(bestsurveys, StockID == stk.chr)
-    # Filter out surveys that do not have at least 25% coverage
-    sdistk_stndrd <- filter(sdistk_stndrd, 
-                          StockID %in% stkbestsurveys$StockID,
-                          SurveyIndex %in% stkbestsurveys$SurveyIndex,
-                          Survey %in% stkbestsurveys$SurveyName,
-                          `Survey Index, Survey Name` %in% stkbestsurveys$`Survey Index, Survey Name`)
-    # Remove CoG (add other inds if desired)
-    sdistk_stndrd[sdistk_stndrd$`Spatial Indicator` == "CoG (x)" | 
-                    sdistk_stndrd$`Spatial Indicator` == "CoG (y)",]$`Spatial Indicator Value` <- NaN
-    ## 10.0 Remove Inds < 0.5 TSS ####
-    sdistk_stndrd[sdistk_stndrd$maxTSS < 0.5 & !is.na(sdistk_stndrd$maxTSS),]$`Spatial Indicator Value/OptThresh` <- NaN
-    # Keep colours consistent between allsurvey plots and bestsurevy plots
-    b <- paste0(stkbestsurveys$SurveyIndex, ", ", stkbestsurveys$SurveyName)
-    colrs <- colrs[b]
-  }
-  if(nrow(sdistk_stndrd) == 0){
-    next
-  }
-  
-  # Filter years so that the years in the spatind plot donot predate the ssb plot
-  sdistk_stndrd <- sdistk_stndrd %>% filter(Year %in% stkssb$Year)
   #### 3.3 Plot SIs with OptThresh####
   writeLines("Plot Spatial Indicators with Optimal Threshold")
   optthresh_plot2 <- ggplot() + 
