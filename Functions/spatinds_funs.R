@@ -41,14 +41,14 @@
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
 spi <- function(hlhh, yrs, qrs, species_aphia, stk_divs){
-#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>SPI>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
-#> This function calculate SPI based on the observed catches. The are argument
-#> can be used to weight areas in circumstances of unequal sized areas
-#> Since ICES rectangles have the same area, this should be set to 1 so that all
-#> rectangles are given equal weight
-#> Index from Plowman, 2003:
-#> https://doi.org/10.1016/S0168-1591(03)00142-4
-#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+  #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>SPI>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+  #> This function calculate SPI based on the observed catches. The are argument
+  #> can be used to weight areas in circumstances of unequal sized areas
+  #> Since ICES rectangles have the same area, this should be set to 1 so that all
+  #> rectangles are given equal weight
+  #> Index from Plowman, 2003:
+  #> https://doi.org/10.1016/S0168-1591(03)00142-4
+  #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
   yrs <- as.numeric(yrs)
   qrs <- as.numeric(qrs)
   # Filter data
@@ -70,77 +70,76 @@ spi <- function(hlhh, yrs, qrs, species_aphia, stk_divs){
 ", "No data for years ", paste(c(setdiff(yrs, unique(s1$Year)), setdiff(unique(s1$Year), yrs)), collapse = ", "), " in ", unique(hlhh$Survey.x), " survey data (quarters ", paste(sort(unique(s1$Quarter)), collapse = ", "), "), region(s) ", paste0(stk_divs, collapse = ", "), ".\n"), immediate. = TRUE)
   }
   
-  # All rectangles sampled each year and the total duration of hauls within them
+  # All rectangles sampled each year and the total duration of hauls within them for ALL species
   rectsamp <- s1 %>% 
     select(Year,StatRec,HaulDur) %>%
     group_by(Year, StatRec) %>%
     summarise(TotalHaulDur = sum(HaulDur))
   
-  # Fo: observed frequency -- catches in each rectangle/area
-  observed <- s1 %>% 
+  # Fo: observed frequency -- catches in each positive rectangle/area
+  observed2 <- s1 %>% 
     filter(Valid_Aphia == species_aphia) %>%
     select(haul.id, Valid_Aphia, Year, Quarter, StatRec, Area_27, TotalNo, HaulVal, HaulDur) %>%
     distinct() %>%
     group_by(Year, StatRec) %>%
     summarise(Fo = sum(TotalNo),
               TotSpcsHaulDur = sum(HaulDur),
-              Fo.Dur = sum(TotalNo)/sum(HaulDur))
+              Fo.Dur = Fo/TotSpcsHaulDur)
   
   # Merge and divide the total number of catches by total duration hauled in each rectangle
-  observed <- left_join(rectsamp, observed, by = c("Year", "StatRec")) # left_join keeps the rectangles where there were no species observations as NAs
+  observed <- left_join(rectsamp, observed2, by = c("Year", "StatRec")) # left_join keeps the rectangles where there were no species observations as NAs
   observed$Fo[is.na(observed$Fo)] <- 0 # change NAs in Fo to 0
   observed$TotSpcsHaulDur[is.na(observed$TotSpcsHaulDur)] <- 0 # change NAs in Fo to 0
   observed$Fo.Dur[is.na(observed$Fo.Dur)] <- 0 # change NAs in Fo to 0
   
-  # should this not be Fo.Dur divided by TotalHaulDur !?!?
-  observed <- observed %>%
-    mutate(Fo.Dur2 = Fo/TotalHaulDur) # standardise 
-  
   # Total recorded observations 
   TotalObs <- observed %>%
     group_by(Year) %>%
-    summarise(TotRecObs = sum(Fo),
-              TotRecObs.Dur = sum(Fo.Dur),
-              TotRecObs.Dur2 = sum(Fo.Dur2))
+    summarise(YrTotObs = sum(Fo),
+              YrTotObs.Dur = sum(Fo.Dur))
   TotalObs <- left_join(observed, TotalObs, by = "Year")
   
-  # What percentage of the total surveyd area do each rectangle take up?
+  # What proportion of the total surveyd area do each rectangle take up?
   # Assumming equal areas of rectangles, by the total number of rectangles
   AreaPerRect <- s1 %>%
     select(Year, StatRec) %>%
     group_by(Year) %>%
     summarise(N.rects = length(unique(StatRec))) %>%
-    mutate(PercArea = 1/N.rects*100) # Percetnage area of each rectangle 
+    mutate(Area = 1/N.rects) # Proportion area of each rectangle 
   
-  # Fe = total recorded obs x (%area/100) -- (for equal areas)
+  # Fe: the expected dsitribution of catches if total catch were evenly
+  # distributed across surveyd rectangles 
+  # Fe = total recorded obs x area -- (for equal areas)
+  # Fo-Fe = the absolte difference between Fo and Fe
   fefo <- left_join(TotalObs, AreaPerRect, by = "Year") %>%
-    mutate(Fe = TotRecObs*(PercArea/100),
-           Fe.Dur = (TotRecObs.Dur)*(PercArea/100),
-           Fe.Dur2 = (TotRecObs.Dur2)*(PercArea/100),
-           `fo-fe` = abs(Fo.Dur - Fe.Dur),
-           `fo-fe2` = abs(Fo.Dur2 - Fe.Dur2))
+    mutate(Fe = YrTotObs*Area,
+           Fe.Dur = (YrTotObs.Dur)*Area,
+           `fo-fe` = abs(Fo - Fe),
+           `fo-fe.dur` = abs(Fo.Dur - Fe.Dur))
   
-  # fo-fe
+  # sum of fo-fe
   spi1 <- fefo %>%
     group_by(Year) %>%
     summarise(sumFoFe = sum(`fo-fe`),
-              sumFoFe2 = sum(`fo-fe2`))
-  spi2 <- left_join(TotalObs, spi1)
+              sumFoFe.dur = sum(`fo-fe.dur`))
+  spi2 <- left_join(distinct(TotalObs[,c("Year", "YrTotObs", "YrTotObs.Dur")]), spi1, by = "Year")
   
-  # fe min
+  # fe min - the expeted density in the smallest zone
+  # all zones equal for ICES rectangles so just any Fe value
   femin <- fefo %>%
     group_by(Year) %>%
-    select(Year, Fe.Dur, Fe.Dur2) %>%
-    summarise(Femin = min(Fe.Dur),
-              Femin2 = min(Fe.Dur2))
+    select(Year, Fe, Fe.Dur) %>%
+    summarise(Femin = min(Fe),
+              Femin.dur = min(Fe.Dur))
+  spi2 <- left_join(spi2, femin, by = "Year")
   
   # SPI
-  spi3 <- left_join(spi2, femin) %>%
-    mutate(twoN.femin = 2*(TotRecObs.Dur - Femin),
-           twoN.femin2 = 2*(TotRecObs.Dur2 - Femin2),
-           SPI = 1-sumFoFe/twoN.femin,
-           SPI2 = 1-sumFoFe2/twoN.femin2) %>%
-    select(Year, SPI, SPI2) %>%
+  spi3 <- spi2 %>%
+    mutate(Denom = 2*(YrTotObs - Femin),
+           Denom.dur = 2*(YrTotObs.Dur - Femin.dur),
+           SPI = 1-sumFoFe/Denom,
+           SPI.dur = 1-sumFoFe.dur/Denom.dur) %>%
+    select(Year, SPI, SPI.dur) %>%
     distinct() %>%
     mutate(Quarter = paste(sort(unique(s1$Quarter)), collapse = ", ")) %>%
     relocate(Year, Quarter)
