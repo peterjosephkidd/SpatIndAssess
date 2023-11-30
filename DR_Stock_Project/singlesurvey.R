@@ -34,11 +34,11 @@ stocklist.chr <- list("cod.27.47d20_nov", "had.27.46a20", "ple.27.420", "ple.27.
                       "pok.27.3a46", "sol.27.4", "tur.27.4", "whg.27.47d", "wit.27.3a47d") # ignore so.27.7d for now, need to find YFS survey data
 
 ### B. Choose survey ####
-stk <- had.27.46a20
-stk.chr <- "had.27.46a20"
-SurveyName <- "NS-IBTS" # name of the survey that feeds into the stock assessment
-IndexFolder <- "Q1" # name of survey index in advice sheet
-SurveyFolder <- "NS-IBTS" # name fo survey in advice sheet
+stk <- ple.27.420
+stk.chr <- "ple.27.420"
+SurveyName <- "BTS" # name of the survey that feeds into the stock assessment
+IndexFolder <- "BTS+IBTS Q3" # name of survey index in advice sheet
+SurveyFolder <- "BTS" # name fo survey in advice sheet
 
 ### B. Calculate Spatial Indicators ####
 
