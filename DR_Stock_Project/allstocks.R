@@ -1,7 +1,8 @@
 #> Calculate Spatial Indicators
 #> Loop through all stocks at once
 rm(list = ls())
-### A. Load in requirements ####
+
+### A. Load in requirements ----------------------------------------------------
 # load packages
 pckgs <- c("FLCore", "FLBRP", "dplyr", "ggplot2", "ggplotFL", "rgdal", 
            "DataExplorer", "rgeos", "sf", "mapplots", "maptools", "mapproj", 
@@ -12,35 +13,36 @@ for(pkg in pckgs){
 }
 rm(pckgs, pkg)
 
-# Source user functions
+#### 1. Source user functions ####
 source(paste0(getwd(), "/Functions/dataprep_funs.R")) # for dealing with datras data
 source(paste0(getwd(), "/Functions/spatinds_funs.R")) # for computing spatial indicators
 source(paste0(getwd(), "/Functions/ROC_funs.R"))      # for ROC and TSS
 
-# Load ICES rectangles and divisions
+#### 2. Load ICES rectangles and divisions ####
 load(paste0(getwd(), "/Data/ICES Rect/ices_rect.rds"))
 load(paste0(getwd(), "/Data/ICES Divs/ices_divs.rds"))
 
-# Load stock metainformation
+#### 3. Load stock metainformation ####
 allstk_metadata <- read_excel(paste0(getwd(), "/Data/DR_Stocks/Advice Sheets/2022/stock_metadata_refpts.xlsx"), sheet = "stk_metadata")
 allstk_refpts <- read_excel(paste0(getwd(), "/Data/DR_Stocks/Advice Sheets/2022/stock_metadata_refpts.xlsx"), sheet = "stk_refpts")
 allstk_spcsinfo <- read_excel(paste0(getwd(), "/Data/DR_Stocks/Advice Sheets/2022/stock_metadata_refpts.xlsx"), sheet = "spcs_info")
 
-# Load Stock Objects
+#### 4. Load Stock Objects ####
 stockobj.path <- paste0(getwd(), "/Data/DR_Stocks/Stock Objects/2022/")
 for(stockfile in list.files(stockobj.path)){load(paste0(stockobj.path, stockfile))}
 stocklist <- list(cod.27.47d20_nov, had.27.46a20, ple.27.420, ple.27.7d, 
                   pok.27.3a46, sol.27.4, tur.27.4, whg.27.47d, wit.27.3a47d) # ignore so.27.7d for now, need to find YFS survey data
 stocklist.chr <- list("cod.27.47d20_nov", "had.27.46a20", "ple.27.420", "ple.27.7d", 
                       "pok.27.3a46", "sol.27.4", "tur.27.4", "whg.27.47d", "wit.27.3a47d") # ignore so.27.7d for now, need to find YFS survey data
+#### 5. Toggle type ####
+type <- "AllSurveys" # `AllSurveys` or `BestSurveys`
 
-type <- "AllSurveys" # name added to signify filter for best surveys
-
+#### 6. Toggle stock ####
 # Toggle to specific stocks or leave to run for all stocks
 #stocklist <- list(ple.27.420)
 #stocklist.chr <- list("ple.27.420")
 
-### B. Calculate Spatial Indicators ####
+### B. Calculate Spatial Indicators --------------------------------------------
 meanrects <- data.frame() # storage for ordering surveys by coverage
 
 for(i in 1:length(stocklist)){
@@ -375,25 +377,26 @@ for(i in 1:length(stocklist)){
                Survey = names(stk_data_filtered[[indx]][survey]),
                StockID = stk.chr) %>%
         relocate(StockID, SurveyIndex, Survey, Year, Quarter, `Gini Index`) #, D95, `Positive Area (Haul)`, `Positive Area (Rectangle)`, SPI) these might also have to be ordered to match roc order
-      ##### 3.1 Save Data ####
+      #### 3.1 Save Data ####
       path <- paste0(si.data.path, names(stk_data_filtered[indx]), "/", names(stk_data_filtered[[indx]][survey]))
       dir.create(path, recursive = TRUE)
       save(si, file = paste0(path, "/SpatIndData - ", stk.chr, " - ", names(stk_data_filtered[indx]), " - ", names(stk_data_filtered[[indx]][survey]), ".rda"))
-    }
+      #### 3.2 Mean rects ####
+      }
   }
   message("Complete")
   toc()
 }
-
+# Mean rects dataframe
 # Organise survey coverage dataframe
 colnames(meanrects) <- c("StockID", "StkDivs", "YrStrt", "YrEnd", "SurveyIndex", "SurveyName", "MeanRects")
 meanrects$MeanRects <- as.numeric(meanrects$MeanRects)
 meanrects$TotalRects <- totrec$N
 meanrects$SurvCoverage <- round((meanrects$MeanRects/meanrects$TotalRects)*100, 2)
 meanrects$`Survey Index, Survey Name` <- paste0(meanrects$SurveyIndex, ", ", meanrects$SurveyName)
-# save 
+# save meanrects 
+head(meanrects)
 save(meanrects, file = paste0(getwd(), "/Data/meanrects.rda"))
-
 
 ### C. Plot Spatial Indicators ####
 #### 1. Load and Prepare Data ####
