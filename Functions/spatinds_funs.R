@@ -41,14 +41,14 @@
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
 spi <- function(hlhh, yrs, qrs, species_aphia, stk_divs){
-  #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>SPI>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
-  #> This function calculate SPI based on the observed catches. The are argument
-  #> can be used to weight areas in circumstances of unequal sized areas
-  #> Since ICES rectangles have the same area, this should be set to 1 so that all
-  #> rectangles are given equal weight
-  #> Index from Plowman, 2003:
-  #> https://doi.org/10.1016/S0168-1591(03)00142-4
-  #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>SPI>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+#> This function calculate SPI based on the observed catches. The are argument
+#> can be used to weight areas in circumstances of unequal sized areas
+#> Since ICES rectangles have the same area, this should be set to 1 so that all
+#> rectangles are given equal weight
+#> Index from Plowman, 2003:
+#> https://doi.org/10.1016/S0168-1591(03)00142-4
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
   yrs <- as.numeric(yrs)
   qrs <- as.numeric(qrs)
   # Filter data
