@@ -1099,11 +1099,11 @@ cogplot <- function(cog, xlim, ylim, ...){
   
   p <- ggplot() +
     geom_sf(data = worldsf, size = 0.1) + 
-    geom_path(data = cog, aes(x = `CoG (x)`, y = `CoG (y)`, col = Year)) +
+    geom_path(data = cog, aes(x = `CoG (x)`, y = `CoG (y)`), alpha = 0.5) +
     geom_point(data = cog, aes(x = `CoG (x)`, y = `CoG (y)`, col = Year)) +
     #geom_text(data = cog, aes(label = Year, x = `CoG (x)`, y = `CoG (y)`)) +
     coord_sf(xlim, ylim) + 
-    labs(title = paste0("Centre of Gravity over time"),
+    labs(title = paste0("Changes in Centre of Gravity Over Time"),
          subtitle = paste0(min(cog$Year), " - ", max(cog$Year))) +
     xlab("Longitude") +
     ylab("Latitude") +
