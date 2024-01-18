@@ -357,12 +357,18 @@ lorenz_plot <- function(lorenz_data){
   lplot <- ggplot(data = lorenz_data, aes(x = rect_num_prop, y = cumsum_prop)) + 
   geom_line(aes(group = Year, colour = Year), alpha = 0.3, linewidth = 2) +
   geom_abline() +
-  geom_vline(xintercept = 0.95, lty = 2, colour = "black", linewidth = 1) +
+  geom_vline(xintercept = 0.95, colour = "black", linewidth = 0.5) +
+  geom_hline(yintercept = 0.95, colour = "black", linewidth = 0.5) +
+    
   coord_cartesian(ylim= c(0,1), xlim = c(0,1), expand = FALSE) +
     labs(title = paste0("Lorenz Curve: Distribution of ", species, " (", min(lorenz_data$Year),":", max(lorenz_data$Year), ", Q", paste(sort(unique(lorenz_data$Quarter)), collapse = ", "), ")"), 
-         subtitle = "Dashed line = Proportion of population observed within 95% of rectangles (D95)",
-x = "Culmuative Number of Rectangles (%/100)", 
-y = "Culmuative Sum of Species Counts (%/100)") +
+         subtitle = paste0(
+           "Where vertical line intercepts Lorenz curve = Proportion of population observed within 95% of rectangles (D95 population).",  
+         "\nWhere horizontal line intercepts Lorenz curve = Proportion of survey area occupied by 95% of the population (D95 area).",
+         "\nGini index = area between indentity function and Lorenz curve.",
+         "\nSpreading area = area below Lorenz curve."),
+x = "Culmuative Proportion of Rectangles Sampled", 
+y = "Culmuative Proportion of Catch") +
   theme(axis.line.x = element_line(colour = 'black', linetype='solid'),
         axis.line.y = element_line(colour = 'black', linetype='solid'),
         plot.title = element_text(size = 10),
@@ -396,36 +402,19 @@ Gini <- function(lorenz){
 
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
-d95old <- function(lorenz){
+d95 <- function(lorenz, level = 0.95, type = "population"){
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> D95 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
-#> The proportion of the population observed within 95% of rectangles
-#> The point where the solid red line in Lorenz plot 
-#> intersects the Lorenz curve for each year.
-#> Calculate lorenz data first
+#> lorenz = lorenz data produced lorenz_data()
+#> level = the proportion used to calculate D95. 
+#>         The threshold set on the x (for area) or y (for population) axis that intercepts with the Lorenz curve.
+#> type = 'population' or 'area'. 
+#>>        D95 with 'population' gives an estimate of the proprtoion of the population recorded in x% of ICES rectangles; x = level.
+#>>        D95 with 'area' gives an estimate of the proprotion of ICES rectangles survyed that contain x% of the population; x = level.
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
-  D95_d <- data.frame()
-  for(yr in unique(lorenz$Year)){
-    lorenz_t3 <- subset(lorenz, lorenz$Year == yr)
-    L <- Lc(lorenz_t3$TotalNo_Dur)
-    # Get the index  of where cumsum of total pop is above or equal to 95%
-    D95_index <- which(L$p >= 0.95)[1]
-    D95_cumsum <- L$p[D95_index]
-    # Get D95 value of proportion of rectangles supporting 95% of population
-    D95 <- L$L[D95_index]
-    output <- c(yr, D95_index, D95_cumsum, D95)
-    
-    D95_d <- rbind(D95_d, output)
+  if(!level > 0 | !level < 1){
+    stop("Argument 'level' must be between 0 and 1. Default = 0.95.")
   }
-  colnames(D95_d) <- c("Year", "Index_loc", "D95_cumsum", "D95")
-  D95_d$D95[is.nan(D95_d$D95)] <- 0 # change NaNs to 0
-  D95_d$Year <- as.numeric(as.character(D95_d$Year)) 
-  D95_d <- D95_d %>%
-    mutate(Quarter = paste(sort(unique(lorenz$Quarter)), collapse = ", ")) %>%
-    relocate(Year, Quarter, Index_loc, D95_cumsum, D95)
-  return(D95_d)
-}
-
-d95 <- function(lorenz){
+  
   D95_d <- data.frame()
   for(yr in unique(lorenz$Year)){
     g <- filter(lorenz, Year == yr)
@@ -433,17 +422,28 @@ d95 <- function(lorenz){
     # intersects the Lorenz curve
     if(any(is.na(g$cumsum_prop))){
       D95 <- NA
-    } else{
+    } else if(type == "area"){
+      intrsct <- approxfun(g$cumsum_prop, g$rect_num_prop)
+      D95 <- intrsct(level)
+    } else if(type == "population"){
       intrsct <- approxfun(g$rect_num_prop, g$cumsum_prop)
-      D95 <- intrsct(0.95)
-    }
+      D95 <- intrsct(level)
+    } else{stop("Argument 'type' must be set to 'area' or 'population'. Default = 'population'.")}
+    
     output <- cbind(yr, D95)
     D95_d <- rbind(D95_d, output)
-    }
+    
+  }
   D95_d <- D95_d %>% 
     rename("Year" = yr) %>%
     mutate(Quarter = paste(sort(unique(lorenz$Quarter)), collapse = ", ")) %>%
     relocate(Year, Quarter, D95)
+  if(type == "population"){
+    writeLines(paste0("D95 is an estimate of the proportion of the population that exists in ", level*100, "% of surveyed rectangles."))
+  }
+  if(type == "area"){
+    writeLines(paste0("D95 is an estimate, as a proportion, of the surveyed area that ", level*100, "% of the population occupy."))
+  }
   return(D95_d)
 }
 
@@ -540,20 +540,20 @@ spreadingarea_calc <- function(z, w = NA, plot = F){
   SA <- sum((QT[1:nb]+QT[2:(nb+1)])*w)/Q
   
   # computation of (Q-Q(T))/Q as a function of T
-  T <- c(0,cumsum(w))
-  T <- T[nb+1] - T
-  T <- rev(T)
-  Tprop <- T/max(T)
+  fT <- c(0,cumsum(w))
+  fT <- fT[nb+1] - fT
+  fT <- rev(fT)
+  Tprop <- fT/max(fT)
   QT <- QT[nb+1] - QT
   QT <- rev(QT)
   
   # display
   if(plot)
-    plot(T, (Q-QT)/Q, main="Curve (Q-Q(T))/Q", type="o", pch="+")
+    plot(fT, (Q-QT)/Q, main="Curve (Q-Q(T))/Q", type="o", pch="+")
   
   
-  x <- Tprop
-  y <- (Q-QT)/Q
+  x <- fT/sum(w)
+  y <- QT
   id <- order(x)
   auc <- sum(diff(x[id])*rollmean(y[id],2))
   
