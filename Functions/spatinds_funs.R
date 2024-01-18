@@ -1035,7 +1035,7 @@ coginis <- function(hlhh, yrs, qrs, species_aphia, stk_divs, # data specifics
       # Plot
       if(plot){
         if(nrow(d) < 1){
-          warning("Cannot plot. No catched in survey data for year provided")
+          warning("Cannot plot. No catch in survey data for year provided")
         } else{
           pal <- paletteer::paletteer_c("grDevices::Geyser", length(d$x))
           dplot <- d %>% arrange(z) %>%
@@ -1051,7 +1051,7 @@ coginis <- function(hlhh, yrs, qrs, species_aphia, stk_divs, # data specifics
           posy <- min(ylim)+2
           
           #par(pty = "s")
-          map(xlim = xlim, ylim = ylim)
+          maps::map(xlim = xlim, ylim = ylim)
           points(dplot$x, dplot$y, cex = scale(dplot$z), col = scales::alpha(dplot$pal, 0.05), pch = 16, xlim = xlim, ylim = ylim)
           segments(xa,ya,xb,yb, col = "blue")
           segments(xc,yc,xd,yd, col = "blue")
