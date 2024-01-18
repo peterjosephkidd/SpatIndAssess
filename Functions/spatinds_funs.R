@@ -1087,6 +1087,34 @@ coginis <- function(hlhh, yrs, qrs, species_aphia, stk_divs, # data specifics
 
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+#>>>>>>>>>>>>>>>>>>> Visualise CoG over time #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+cogplot <- function(cog, xlim, ylim, ...){
+  world <- map_data("world")
+  worldsf <- sfheaders::sf_polygon(
+    obj = world
+    , x = "long"
+    , y = "lat"
+    , polygon_id = "group"
+  ) 
+  
+  p <- ggplot() +
+    geom_sf(data = worldsf, size = 0.1) + 
+    geom_path(data = cog, aes(x = `CoG (x)`, y = `CoG (y)`, col = Year)) +
+    geom_point(data = cog, aes(x = `CoG (x)`, y = `CoG (y)`, col = Year)) +
+    #geom_text(data = cog, aes(label = Year, x = `CoG (x)`, y = `CoG (y)`)) +
+    coord_sf(xlim, ylim) + 
+    labs(title = paste0("Centre of Gravity over time"),
+         subtitle = paste0(min(cog$Year), " - ", max(cog$Year))) +
+    xlab("Longitude") +
+    ylab("Latitude") +
+    theme_minimal()
+    
+  return(p)
+}
+
+
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
 #>>>>>>>>>>>>>>>>>>> Centre of Gravity, Inertia, Area of Ellipse
 coginert <- function(hlhh, yrs, qrs, species_aphia, stk_divs){
   yrs <- as.numeric(yrs)
