@@ -916,25 +916,25 @@ coginis <- function(hlhh, yrs, qrs, species_aphia, stk_divs, # data specifics
                 plot = F, xlim = NA, ylim = NA,          # plot
                 density = F,                             # density weighted spat inds
                 lonlat2km = F, km2lonlat = F){           # conversion of lonlats to/from km
-  #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Inertia >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
-  #> This function computes three spatial indicators and is integrated with 
-  #> DATRAS data format:
-  #> 
-  #> 1: CoG - mean location (can be weighted by density)
-  #> 2: Inertia - mean variance around CoG (can be weighted by density)
-  #> 3: Isotropy - The shape of Inertia. If perfect cirlce, isotropy = 1. 
-  #>> The more elliptical the inertia (i.e. mean variance in one direction is 
-  #>> greater than the mean variance in another orthogonal direction) the closer 
-  #>> Isotropy is to zero. Gives inidication on how symetrical the variation is 
-  #>> around the CoG
-  #>
-  #> Toggle which indicators you want reported
-  #> Can transform longitiude and latitude to km and vice versa
-  #> Plot also available
-  #> 
-  #> IMPORTANT: code for PCA is taken from:
-  #> https://github.com/fate-spatialindicators/spatialindicators/blob/master/Spatial_indicators_functions_Woillez2009.r
-  #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> CoGInIs >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+#> This function computes three spatial indicators and is integrated with 
+#> DATRAS data format:
+#> 
+#> 1: CoG - mean location (can be weighted by density)
+#> 2: Inertia - mean variance around CoG (can be weighted by density)
+#> 3: Isotropy - The shape of Inertia. If perfect cirlce, isotropy = 1. 
+#>> The more elliptical the inertia (i.e. mean variance in one direction is 
+#>> greater than the mean variance in another orthogonal direction) the closer 
+#>> Isotropy is to zero. Gives inidication on how symetrical the variation is 
+#>> around the CoG
+#>
+#> Toggle which indicators you want reported
+#> Can transform longitiude and latitude to km and vice versa
+#> Plot also available
+#> 
+#> IMPORTANT: code for PCA is taken from:
+#> https://github.com/fate-spatialindicators/spatialindicators/blob/master/Spatial_indicators_functions_Woillez2009.r
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
   yrs <- as.numeric(yrs)
   qrs <- as.numeric(qrs)
   d2 <- hlhh %>%
@@ -986,6 +986,8 @@ coginis <- function(hlhh, yrs, qrs, species_aphia, stk_divs, # data specifics
       Inertia <- NaN
       Isotropy <- NaN
     } else{
+      # remove NAs
+      d <- na.omit(d)
       # Density weighted CoG
       cg_x <- sum(d$x*d$z)/sum(d$z)
       cg_y <- sum(d$y*d$z)/sum(d$z)
@@ -1088,7 +1090,18 @@ coginis <- function(hlhh, yrs, qrs, species_aphia, stk_divs, # data specifics
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
 #>>>>>>>>>>>>>>>>>>> Visualise CoG over time #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
-cogplot <- function(cog, xlim, ylim, ...){
+cogplot <- function(cog, grid = NA, areas = NA, xlim, ylim, ...){
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> cogplot >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+#> 
+#> Visualise and map changes in CoG over time on one plot 
+#> 
+#> cog: mean longitude and latitude coordinates produced from coginis()
+#> grid: Add ICES statistical rectangles. Increases computation time. Default is no grid. Grid must be compatible with geom_tile().
+#> xlim: x axis plotting window
+#> ylim: y axis plotting window
+#> 
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+  
   world <- map_data("world")
   worldsf <- sfheaders::sf_polygon(
     obj = world
@@ -1097,26 +1110,49 @@ cogplot <- function(cog, xlim, ylim, ...){
     , polygon_id = "group"
   ) 
   
+  if(!all(is.na(grid))){
+    grid <- grid %>%
+      filter(Area_27 %in% areas)
+  }
+     
   p <- ggplot() +
+    {if(!all(is.na(grid))) list(
+      geom_tile(data = grid, aes(x = stat_x, y = stat_y, fill = Area_27, 
+                                 text = paste0("ICES Area: ", Area_27,
+                                               "\nICES Rectangle: ", ICESNAME,
+                                               "\nLongitude: ", stat_x, 
+                                               "\nLatitude: ", stat_y)), 
+                alpha = 0.4, colour = "grey30", show.legend = T),
+      scale_fill_brewer(palette = "Set3")
+      )} +
     geom_sf(data = worldsf, size = 0.1) + 
-    geom_path(data = cog, aes(x = `CoG (x)`, y = `CoG (y)`), alpha = 0.5) +
-    geom_point(data = cog, aes(x = `CoG (x)`, y = `CoG (y)`, col = Year)) +
+    geom_path(data = cog, aes(x = `CoG (x)`, y = `CoG (y)`)) +
+    geom_point(data = cog, aes(x = `CoG (x)`, y = `CoG (y)`, col = Year, 
+                               text = paste0("Year: ", Year, 
+                                             "\nCoG (x): ", round(`CoG (x)`, 2),
+                                             "\nCoG (y): ", round(`CoG (y)`, 2)))) +
+    
     #geom_text(data = cog, aes(label = Year, x = `CoG (x)`, y = `CoG (y)`)) +
     coord_sf(xlim, ylim) + 
     labs(title = paste0("Changes in Centre of Gravity Over Time"),
          subtitle = paste0(min(cog$Year), " - ", max(cog$Year))) +
     xlab("Longitude") +
     ylab("Latitude") +
-    theme_minimal()
+    theme_minimal() +
+    theme(
+      panel.grid = element_blank(),
+      panel.border = element_rect(colour = "black", fill = NA)
+    ) +
+    guides(fill = guide_legend(title = "ICES Area"))
     
   return(p)
 }
-
 
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
 #>>>>>>>>>>>>>>>>>>> Centre of Gravity, Inertia, Area of Ellipse
 coginert <- function(hlhh, yrs, qrs, species_aphia, stk_divs){
+  
   yrs <- as.numeric(yrs)
   qrs <- as.numeric(qrs)
   cog_data2 <- hlhh %>%
