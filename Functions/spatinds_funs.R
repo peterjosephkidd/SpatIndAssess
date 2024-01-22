@@ -700,7 +700,7 @@ ellarea <- function(hlhh, yrs, qrs, species_aphia, stk_divs){
   yrs <- as.numeric(yrs)
   qrs <- as.numeric(qrs)
   d2 <- hlhh %>%
-    filter(Area_27 %in% stk_divs,
+    filter(Area_27 %in% c(stk_divs),
            Year %in% c(yrs),
            Quarter %in% c(qrs),
            HaulVal != "I", 
@@ -710,12 +710,12 @@ ellarea <- function(hlhh, yrs, qrs, species_aphia, stk_divs){
   # Check what data is available
   if(!identical(as.numeric(unique(d2$Quarter)), qrs)){
     warning(paste0("Data not found in all survey quarters provided. 
-    ", "Only data for quarters ", paste(sort(unique(d2$Quarter)), collapse = ", ")), " available in ", unique(hlhh$Survey.x), " survey data (years ", min(yrs), ":", max(yrs), "), region(s) ", paste0(stk_divs, collapse = ", "), ".
+    ", "Only data for quarters ", paste(sort(unique(d2$Quarter)), collapse = ", ")), " available in ", unique(hlhh$Survey.x), " survey data (years ", min(yrs), ":", max(yrs), "), region(s) ", paste0(c(stk_divs), collapse = ", "), ".
     ", "No data for quarter ", paste(c(setdiff(qrs, unique(d2$Quarter)), setdiff(unique(d2$Quarter), qrs)), collapse = ", "), "\n", immediate. = TRUE)
   }
   if(!identical(as.numeric(sort(unique(d2$Year))), yrs)){
     warning(paste0("Species not found in all survey years provided. 
-    ", "No data for years ", paste(c(setdiff(yrs, unique(d2$Year)), setdiff(unique(d2$Year), yrs)), collapse = ", "), " in ", unique(hlhh$Survey.x), " survey data (quarters ", paste(sort(unique(d2$Quarter)), collapse = ", "), "), region(s) ", paste0(stk_divs, collapse = ", "), ".\n"), immediate. = TRUE)
+    ", "No data for years ", paste(c(setdiff(yrs, unique(d2$Year)), setdiff(unique(d2$Year), yrs)), collapse = ", "), " in ", unique(hlhh$Survey.x), " survey data (quarters ", paste(sort(unique(d2$Quarter)), collapse = ", "), "), region(s) ", paste0(c(stk_divs), collapse = ", "), ".\n"), immediate. = TRUE)
   }
   
   df <- data.frame()
