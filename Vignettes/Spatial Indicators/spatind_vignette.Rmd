@@ -516,7 +516,7 @@ head(sidf)
 ```
 
 ```{r trend_plot, eval = T, echo = T}
-ggplot(data = sidf, aes(x = Year, y = Value)) +
+p <- ggplot(data = sidf, aes(x = Year, y = Value)) +
   geom_line(aes(colour = Type)) +
   scale_x_continuous(breaks = seq(from = min(unique(sidf$Year)), to = max(unique(sidf$Year)), by = 2)) +
   facet_wrap(vars(Indicator), scales = "free") +
@@ -528,6 +528,8 @@ ggplot(data = sidf, aes(x = Year, y = Value)) +
   labs(title = "Spatial Indicator Timeseries",
        subtitle = ttl(species, stk_divs, srv, qrs, yrs)) +
   ylab("Indicator Value")
+
+ggplotly(p)
 ```
 
 # More Information {#more}
