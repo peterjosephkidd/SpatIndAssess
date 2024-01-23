@@ -1,0 +1,510 @@
+---
+title: "Spatial Indicators Summary"
+subtitle: ""
+author: "Peter Kidd & Laurence Kell"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    toc_collapsed: false
+    number_section: true
+mathjax: TRUE
+fig_width: 6 
+fig_height: 4 
+tags: FLR FLCore introduction
+license: Creative Commons Attribution-ShareAlike 4.0 International Public License
+#knit: (function(inputFile, encoding) {
+#  rmarkdown::render(inputFile, encoding = encoding, output_dir="html")})
+#bibliography: bibliography.bib
+---
+
+```{r knitr, echo=FALSE, warning=FALSE, cache = FALSE}
+pckgs <- c("knitr", "icesDatras", "icesVocab", "dplyr", "RCurl", "rvest", "maps", "ggplot2", "plotly", "devtools", "ineq", "zoo")
+
+invisible(lapply(pckgs, library, warn.conflicts = F, quietly = T, character.only = T))
+
+
+opts_chunk$set(comment   =NA, 
+               warning   =FALSE, 
+               message   =FALSE, 
+               error     =FALSE, 
+               echo      =!TRUE, 
+               eval      =!TRUE,
+               
+               cache     =FALSE, 
+               cache.path="cache/spatial/",
+               
+               fig.path  ="../tex/spatial-",
+               fig.width =8,
+               fig.height=6,
+               dev       ="png")
+
+options(digits=3)
+
+iFig=0
+iTab=0
+```
+
+[Jump to Introduction](#intro)
+
+[Jump to Data Preparation](#prep)
+
+  [Jump to Stock ple.27.420](#stk)
+
+[Jump to Empirical Spatial Indicator Analysis](#esia)
+
+  * [Jump to Location](#loc)
+  
+  * [Jump to Range](#range)
+  
+  * [Jump to Occupancy](#occ)
+  
+  * [Jump to Aggregation](#agg)
+
+[Jump to More Information](#More)
+
+[Jump to References](#References)
+
+# Introduction {#intro}
+
+This vignette provides an overview of spatial indicators used to estimate the location, range, occupancy, and aggregation of populations in the context of fisheries management.
+
+## Data Preparation {#prep}
+
+Spatial indicators are configured to work with DATRAS survey data. Load in some survey data and process it first before parsing through spatial indicator functions.
+
+**Load DATRAS exchange data**
+
+Here we load NS-IBTS Quarter 1 survey data for years 2018 to 2022. 
+
+```{r data_load, echo = T, eval = T, cache = T}
+yrs <- c(2020:2022)
+qrs <- c(1)
+srv <- "NS-IBTS"
+
+hh  <- icesDatras::getDATRAS(record = "HH", srv, years = yrs, quarters = qrs)
+hl <-  icesDatras::getDATRAS(record = "HL", srv, years = yrs, quarters = qrs)
+ca  <- icesDatras::getDATRAS(record = "CA", srv, years = yrs, quarters = qrs) # for completeness, but not used
+```
+Remove duplicate rows in exchange data.
+
+```{r data_rows, echo = T, eval = T, cache = T, dependson = "data_load"}
+hh <- unique(hh)
+hl <- unique(hl)
+ca <- unique(ca)
+```
+
+**ICES Statistical Rectangles**
+
+In the exchange data (in `hh` and `hl`) we know the ICES rectangle that each haul was conducted in, but we do not have the associated division. To be able to subset data to a specific stock region, we need to download [ICES Statistical Rectangle shapefile (Quick Downloads > ICES StatRec mapped to ICES Area)](https://gis.ices.dk/sf/index.html?widget=StatRec) and append information on ICES divisions to our exchange data. A download is available on GitHub and has been converted to a `.rds` file which is loaded in here.
+
+```{r data_shp, echo = T, eval = T}
+load(url("https://github.com/peterjosephkidd/SpatIndAssess/raw/main/Data/ICES%20Rect/ices_rect.rds"))
+```
+Add ICES Divisions
+
+```{r data_merge, echo = T, eval = T, dependson = "data_load"}
+area_div <- dplyr::distinct(ices_rect[c("ICESNAME", "Area_27", "Shape_Area")])
+hh <- merge.data.frame(hh, area_div, by.x = "StatRec", by.y = "ICESNAME")
+ca <- merge.data.frame(ca, area_div, by.x = "AreaCode", by.y = "ICESNAME")
+```
+
+**Basic Data Processing**
+
+Remove invalid hauls:
+
+```{r data_invhaul, echo = T, eval = T, dependson = "data_load"}
+hh <- filter(hh, !HaulVal %in% c("I", "P")) # p = partly valid, it is deprecated 
+```
+
+`-9` is a placeholder for NAs. Change to `NA` for `TotalNo` column:
+
+```{r data_nar, echo = T, eval = T, dependson = "data_load"}
+hl$TotalNo[hl$TotalNo == -9] <- NA
+```
+
+Create haul.id:
+```{r data_haulid, echo = T, eval = T, dependson = "data_load"}
+hh$haul.id <- as.character(
+  paste(hh$Year, hh$Quarter, hh$Country, hh$Ship, hh$Gear, hh$StNo, hh$HaulNo, 
+        sep = ":"))
+hl$haul.id <- as.character(
+  paste(hl$Year, hl$Quarter, hl$Country, hl$Ship, hl$Gear, hl$StNo, hl$HaulNo, 
+        sep = ":"))
+ca$haul.id <- as.character(
+  paste(ca$Year, ca$Quarter, ca$Country, ca$Ship, ca$Gear, ca$StNo, ca$HaulNo, 
+        sep = ":"))
+```
+
+
+Merge haul information from `hh` with landings information in `hl`. 
+
+```{r data_hlhh, echo = T, eval = T, dependson = "data_load"}
+## Refine columns
+m <- hh[c("haul.id", "Year", "Quarter", "Month", "Survey","Country", "Ship", 
+          "Gear", "GearEx", "DoorType", "HaulDur", "HaulNo", "StNo", "SweepLngt", 
+          "StatRec", "Area_27", "ShootLong", "ShootLat", "HaulVal", "Depth")]
+## Merge HL with HH	
+hlhh <- merge(hl, dplyr::distinct(m),
+              c("haul.id", "Year", "Quarter", "HaulNo", "StNo", "Gear", "GearEx", 
+                "DoorType","Ship", "SweepLngt", "Country", "Survey"))
+rm(m)
+```
+
+[Back to Top](#top)
+
+___
+
+## Stock ple.27.420 {#stk}
+
+Now that DATRAS survey data has been loaded and formatted, choose a stock to investigate and filter data accordingly. This example looks at European plaice (*Plueronectes platessa*) in Subarea 4 (North Sea) and Subdivision 20 (Skagerrak; [ple.27.420)](https://ices-library.figshare.com/articles/report/Plaice_Pleuronectes_platessa_in_Subarea_4_North_Sea_and_Subdivision_20_Skagerrak_Replacing_advice_provided_in_2022/22548568).
+
+**Set parameters**
+```{r stk, echo = T, eval = T, dependson = "data_load"}
+# ple.27.420
+species <- c("plaice", "Pleuronectes platessa")
+species_aphia <- findAphia(species[2], latin = T)
+stk_divs <- c("4.a", "4.b", "4.c", "3.a.20")
+```
+
+**Filter data**
+```{r stk_filter, echo = F, eval = F, dependson = "data_load"}
+hlhh <- filter(hlhh, 
+               Valid_Aphia == species_aphia,
+               Area_27 %in% stk_divs)
+```
+
+**Basic checks**
+```{r stk_check, echo = F, eval = F, dependson = "data_load"}
+unique(hlhh$Valid_Aphia)
+unique(hlhh$Area_27)
+```
+[Back to Top](#top)
+
+___
+
+# Empirical Spatial Indicator Analysis {#esia}
+
+```{r eval = T, echo = F, dependson = list("data_load", "stk")}
+ttl <- function(species, stk_divs, srv, qrs, yrs){
+  paste0(species[1], " (", species[2], ") in ", paste0(stk_divs, collapse = ", "), "\n", srv, " (Q", qrs, ") ", min(yrs), " - ", max(yrs))
+}
+```
+
+```{r esia, echo = T, eval = T, dependson="data_load"}
+# Source Spatial Indicator functions from GitHub
+i <- 1
+source("https://raw.githubusercontent.com/peterjosephkidd/SpatIndAssess/main/Functions/spatinds_funs.R", print.eval = F)
+```
+
+## Location {#loc}
+
+### **Centre of Gravity (CGx, CGy):**
+
+The mean longitudinal and latitudinal location of the population. Changes in CG indicate whether the mean location of the population is shifting eastward/westward (CGx) or northward/southward (CGy).
+
+```{r cg_calc, echo = T, eval = T, dependson = list("data_load", "stk", "esia")}
+cg <- coginis(hlhh, yrs, qrs, species_aphia, stk_divs, 
+              iso = F, inertia = F, # toggle off outputting two another spatial indicators for now
+              density = T) # weight hauls by  density of catch at each sample site (F therefore uses binary presence-absence data)
+
+head(cg)
+```
+
+Visualise changes in `cg` over time 
+```{r cg_plot, echo = T, eval = T, dependson = list("data_load", "stk", "esia")}
+cg_p <-cogplot(cg, 
+               # set grid = ices_rect for ICES rectangles -- takes time to load
+               grid = ices_rect, areas = stk_divs,
+               xlim = c(-2, 6), ylim = c(52, 60)) 
+suppressWarnings(ggplotly(cg_p, tooltip = "text"))
+```
+
+## Range {#range}
+
+### **Inertia (I):** 
+
+Inertia describes the dispersion/variance of the population around its centre of gravity. High values of inertia indicate that the population is widely spread across space.
+
+```{r inert_calc, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+inert <- coginis(hlhh, yrs, qrs, species_aphia, stk_divs, 
+              iso = F, inertia = T, # inertia toggled on
+              density = T) #
+
+head(inert)
+```
+Plot the trend over time
+```{r inert_plot, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+in_p <- ggplot(data = inert, aes(x = Year, y = Inertia)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "Inertia (I) Timeseries",
+       subtitle = ttl(species, stk_divs, srv, qrs, yrs)) +
+  theme(panel.border = element_rect(colour = "black", fill = NA))
+
+in_p
+```
+
+
+### **Extent of Occurrence (EOO):** 
+
+A convex hull polygon is drawn around occurrence points (i.e. sample sites with catch of the target species \> 0). EOO is the area of the polygon. High EOO indicates that the population is spread over a large geographical area.
+```{r eoo_calc, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+eoo <- chullarea(hlhh, yrs, qrs, species_aphia, stk_divs)[1:3] # this function needs tidying up, ignore other columns for now
+head(eoo)
+```
+
+Plot the trend over time
+```{r eoo_plot, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+eoo_p <- ggplot(data = eoo, aes(x = Year, y = convex_hull_area)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal() +
+  ylab("Extent of Occurence") +
+  labs(title = "Extent of Occurence (EOO)",
+       subtitle = ttl(species, stk_divs, srv, qrs, yrs)) +
+  theme(panel.border = element_rect(colour = "black", fill = NA))
+
+eoo_p
+```
+
+
+### **Ellipse Area (ELA):** 
+
+Similar to EOO. But instead of a convex hull, ELA calculates the area of an ellipse that encompasses 95% of the occurrence sites.
+```{r ela_calc, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+print(stk_divs)
+ela <- ellarea(hlhh, yrs, qrs, species_aphia, stk_divs = stk_divs)
+head(ela)
+```
+```{r ela_plot, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+ela_p <- ggplot(data = ela, aes(x = Year, y = `Ellipse Area`)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "Ellipse Area (ELA) Timeseries",
+       subtitle = ttl(species, stk_divs, srv, qrs, yrs)) +
+  theme(panel.border = element_rect(colour = "black", fill = NA))
+
+ela_p
+```
+
+## Occupancy {#occ}
+
+### **Proportion of Presence (POP):** 
+
+Indicates the proportion of area occupied by the target species using binary presence-absence data.
+
+#### **Rectangle (POPR):** 
+
+The proportion of the ICES rectangles surveyed with a catch of the target species \> 0.
+```{r popr_calc, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+popr <- pa_rect(hlhh, yrs, qrs, species_aphia, stk_divs)
+head(popr)
+```
+
+```{r popr_plot, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+popr_p <- ggplot(data = popr, aes(x = Year, y = `PosAreaR`)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "Proportion of Presence in ICES Rectangles (POPR) Timeseries",
+       subtitle = ttl(species, stk_divs, srv, qrs, yrs)) +
+  theme(panel.border = element_rect(colour = "black", fill = NA)) +
+  ylab("Proportion of Presence (Rectangle)")
+
+popr_p
+```
+
+#### **Haul (POPH):** 
+
+The proportion of hauls with catch of the target species \> 0.
+
+```{r poph_calc, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+poph <- pa_haul(hlhh, yrs, qrs, species_aphia, stk_divs)
+head(poph)
+```
+
+```{r poph_plot, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+poph_p <- ggplot(data = poph, aes(x = Year, y = `PosAreaH`)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "Proportion of Presence in Survey Hauls (POPR) Timeseries",
+       subtitle = ttl(species, stk_divs, srv, qrs, yrs)) +
+  theme(panel.border = element_rect(colour = "black", fill = NA)) +
+  ylab("Proportion of Presence (Haul)")
+
+poph_p
+```
+
+### Plotting 
+The `mapdis()` function visualises the above range and occupancy indicators on a single map for one timepoint (e.g. year and quarter). The function can equally be used to visualise a single indicator. 
+```{r mapdis, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+mapdis(hlhh, yrs = 2022, qrs, species_aphia, stk_divs, ices_rect, # data & parameters
+       cog = T, inertia = T, EOO = T, ELA = T, # indicator toggles
+       density = T, # weight samples 
+       title = "Plaice (Pleuronected platessa)\nNS-IBTS", 
+       xlim = c(-5,11), ylim = c(50, 62)) # plotting window
+         
+```
+
+
+## Aggregation {#agg}
+
+### **Gini Index:** 
+
+Derived from a Lorenz curve. Ranges from 0 to 1, with 1 indicating that the population is uniformly distributed across surveyed rectangles, and 0 indicating that the population was recorded in one rectangle.
+
+```{r lor_data, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+lordat <- lorenz_data(hlhh, yrs, qrs, species_aphia, stk_divs)
+lorenz_plot(lordat) + 
+  theme_minimal() +
+    theme(panel.border = element_rect(colour = "black", fill = NA)) # function needs tidying
+```
+
+```{r gini_calc, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+gni <- Gini(lordat)
+head(gni)
+```
+
+```{r gini_plot, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+gni_p <- ggplot(data = gni, aes(x = Year, y = `Gini Index`)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "Gini Index Timeseries",
+       subtitle = ttl(species, stk_divs, srv, qrs, yrs)) +
+  theme(panel.border = element_rect(colour = "black", fill = NA)) 
+
+gni_p
+```
+
+### **D95:** 
+
+Represents the proportion of the population present in 95% of the area. Ranges from 0 to 0.95, with 0 indicating that all individuals were recorded in 5% of the surveyed area (high aggregation) and 0.95 indicating that 95% of the population were recorded in 95% of the rectangles surveyed (uniform distribution).
+
+```{r d95_calc, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+D <- d95(lordat)
+```
+
+```{r d95_plot, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+d95_p <- ggplot(data = D, aes(x = Year, y = `D95`)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "Proportion of Catch in 95% of ICES Rectangles in Stock Region (D95) Timeseries",
+       subtitle = ttl(species, stk_divs, srv, qrs, yrs)) +
+  theme(panel.border = element_rect(colour = "black", fill = NA)) 
+
+d95_p
+```
+
+
+### **Spreading Area (SA):**
+
+Derived from cumulative frequency data. Measures the area occupied by the population, taking into account variations in fish density values. High values of SA indicate homogeneous spatial distribution.
+
+```{r sa_calc, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+sa_data <- spreadingarea_data(hlhh, yrs, qrs, species_aphia, stk_divs)
+sa <- sa_data %>%
+        group_by(Year) %>%
+        summarise("Spreading Area" = spreadingarea_calc(TotalNo_Dur)) %>%
+        mutate(Quarter = paste(as.character(sort(unique(sa_data$Quarter))), collapse = ", ")) %>% # add quarters
+        relocate(Year, Quarter) 
+head(sa)
+```
+
+```{r sa_plot, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+sa_p <- ggplot(data = sa, aes(x = Year, y = `Spreading Area`)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "Spreading Area (SA) Timeseries",
+       subtitle = ttl(species, stk_divs, srv, qrs, yrs)) +
+  theme(panel.border = element_rect(colour = "black", fill = NA)) 
+
+sa_p
+```
+
+### **Equivalent Area (EA):** 
+
+The area that would be covered by a population with homogeneously distributed density. It is equal to the mean density per individual.
+
+```{r ea_calc, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+ea <- sa_data %>%
+        group_by(Year) %>%
+        summarise("Equivalent Area" = equivalentarea(TotalNo_Dur)) %>%
+        mutate(Quarter = paste(as.character(sort(unique(sa_data$Quarter))), collapse = ", ")) %>% # add quarters
+        relocate(Year, Quarter)
+head(ea)
+```
+
+```{r ea_plot, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+ea_p <- ggplot(data = ea, aes(x = Year, y = `Equivalent Area`)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "Equivalent Area (EA) Timeseries",
+       subtitle = ttl(species, stk_divs, srv, qrs, yrs)) +
+  theme(panel.border = element_rect(colour = "black", fill = NA)) 
+
+ea_p
+```
+
+
+### **Spread of Participation Index (SPI):** 
+
+Compares the observed spatial density distribution to the density distribution expected from a homogeneously distributed population. Ranges from 0 to 1, with 0 indicating that the population was observed in only one ICES rectangle, and 1 indicating that the population density was uniformly distributed across ICES rectangles.
+
+```{r spi_calc, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+SPI <- spi(hlhh, yrs, qrs, species_aphia, stk_divs)[c(1,2,4)] # function needs tidying
+
+head(SPI)
+```
+
+```{r spi_plot, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+spi_p <- ggplot(data = SPI, aes(x = Year, y = `SPI.dur`)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "Spread of Participation Index (SPI) Timeseries",
+       subtitle = ttl(species, stk_divs, srv, qrs, yrs)) +
+  theme(panel.border = element_rect(colour = "black", fill = NA)) +
+  ylab("Spread of Participation Index (SPI)")
+
+spi_p
+```
+
+[Back to Top](#top)
+
+# More Information {#more}
+
+-   For more information on the FLR Project for Quantitative Fisheries
+    Science in R, visit the FLR webpage [^1].
+
+[^1]: <http://flr-project.org>
+
+## Author information
+
+## Acknowledgements
+
+## Software Versions
+
+**`r version$version.string`**
+
+-   FLCore: `r packageVersion('FLCore')`
+
+-   ggplotFL: `r packageVersion('ggplotFL')`
+
+-   ggplot2: `r packageVersion('ggplot2')`
+
+**Compiled**: `r date()`
+
+[Back to Top](#top)
+
+# References {#references}
+
+[Back to Top](#top)
