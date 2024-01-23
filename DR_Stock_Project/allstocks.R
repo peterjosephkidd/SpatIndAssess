@@ -39,8 +39,8 @@ type <- "AllSurveys" # `AllSurveys` or `BestSurveys`
 
 #### 6. Toggle stock ####
 # Toggle to specific stocks or leave to run for all stocks
-#stocklist <- list(ple.27.420)
-#stocklist.chr <- list("ple.27.420")
+stocklist <- list(ple.27.420)
+stocklist.chr <- list("ple.27.420")
 
 ### B. Calculate Spatial Indicators --------------------------------------------
 meanrects <- data.frame() # storage for ordering surveys by coverage
