@@ -9,6 +9,7 @@ output:
     toc_float: true
     toc_collapsed: false
     number_section: true
+    keep_md: true
 mathjax: TRUE
 fig_width: 6 
 fig_height: 4 
@@ -104,7 +105,7 @@ load(url("https://github.com/peterjosephkidd/SpatIndAssess/raw/main/Data/ICES%20
 ```
 Add ICES Divisions
 
-```{r data_merge, echo = T, eval = T, dependson = "data_load"}
+```{r data_merge, echo = T, eval = T}
 area_div <- dplyr::distinct(ices_rect[c("ICESNAME", "Area_27", "Shape_Area")])
 hh <- merge.data.frame(hh, area_div, by.x = "StatRec", by.y = "ICESNAME")
 ca <- merge.data.frame(ca, area_div, by.x = "AreaCode", by.y = "ICESNAME")
@@ -114,18 +115,18 @@ ca <- merge.data.frame(ca, area_div, by.x = "AreaCode", by.y = "ICESNAME")
 
 Remove invalid hauls:
 
-```{r data_invhaul, echo = T, eval = T, dependson = "data_load"}
+```{r data_invhaul, echo = T, eval = T}
 hh <- filter(hh, !HaulVal %in% c("I", "P")) # p = partly valid, it is deprecated 
 ```
 
 `-9` is a placeholder for NAs. Change to `NA` for `TotalNo` column:
 
-```{r data_nar, echo = T, eval = T, dependson = "data_load"}
+```{r data_nar, echo = T, eval = T}
 hl$TotalNo[hl$TotalNo == -9] <- NA
 ```
 
 Create haul.id:
-```{r data_haulid, echo = T, eval = T, dependson = "data_load"}
+```{r data_haulid, echo = T, eval = T}
 hh$haul.id <- as.character(
   paste(hh$Year, hh$Quarter, hh$Country, hh$Ship, hh$Gear, hh$StNo, hh$HaulNo, 
         sep = ":"))
@@ -140,7 +141,7 @@ ca$haul.id <- as.character(
 
 Merge haul information from `hh` with landings information in `hl`. 
 
-```{r data_hlhh, echo = T, eval = T, dependson = "data_load"}
+```{r data_hlhh, echo = T, eval = T}
 ## Refine columns
 m <- hh[c("haul.id", "Year", "Quarter", "Month", "Survey","Country", "Ship", 
           "Gear", "GearEx", "DoorType", "HaulDur", "HaulNo", "StNo", "SweepLngt", 
@@ -161,7 +162,7 @@ ___
 Now that DATRAS survey data has been loaded and formatted, choose a stock to investigate and filter data accordingly. This example looks at European plaice (*Plueronectes platessa*) in Subarea 4 (North Sea) and Subdivision 20 (Skagerrak; [ple.27.420)](https://ices-library.figshare.com/articles/report/Plaice_Pleuronectes_platessa_in_Subarea_4_North_Sea_and_Subdivision_20_Skagerrak_Replacing_advice_provided_in_2022/22548568).
 
 **Set parameters**
-```{r stk, echo = T, eval = T, dependson = "data_load"}
+```{r stk, echo = T, eval = T}
 # ple.27.420
 species <- c("plaice", "Pleuronectes platessa")
 species_aphia <- findAphia(species[2], latin = T)
@@ -169,14 +170,14 @@ stk_divs <- c("4.a", "4.b", "4.c", "3.a.20")
 ```
 
 **Filter data**
-```{r stk_filter, echo = F, eval = F, dependson = "data_load"}
+```{r stk_filter, echo = F, eval = F}
 hlhh <- filter(hlhh, 
                Valid_Aphia == species_aphia,
                Area_27 %in% stk_divs)
 ```
 
 **Basic checks**
-```{r stk_check, echo = F, eval = F, dependson = "data_load"}
+```{r stk_check, echo = F, eval = F}
 unique(hlhh$Valid_Aphia)
 unique(hlhh$Area_27)
 ```
@@ -186,13 +187,13 @@ ___
 
 # Empirical Spatial Indicator Analysis {#esia}
 
-```{r eval = T, echo = F, dependson = list("data_load", "stk")}
+```{r eval = T, echo = F}
 ttl <- function(species, stk_divs, srv, qrs, yrs){
   paste0(species[1], " (", species[2], ") in ", paste0(stk_divs, collapse = ", "), "\n", srv, " (Q", qrs, ") ", min(yrs), " - ", max(yrs))
 }
 ```
 
-```{r esia, echo = T, eval = T, dependson="data_load"}
+```{r esia, echo = T, eval = T}
 # Source Spatial Indicator functions from GitHub
 i <- 1
 source("https://raw.githubusercontent.com/peterjosephkidd/SpatIndAssess/main/Functions/spatinds_funs.R", print.eval = F)
@@ -204,7 +205,7 @@ source("https://raw.githubusercontent.com/peterjosephkidd/SpatIndAssess/main/Fun
 
 The mean longitudinal and latitudinal location of the population. Changes in CG indicate whether the mean location of the population is shifting eastward/westward (CGx) or northward/southward (CGy).
 
-```{r cg_calc, echo = T, eval = T, dependson = list("data_load", "stk", "esia")}
+```{r cg_calc, echo = T, eval = T}
 cg <- coginis(hlhh, yrs, qrs, species_aphia, stk_divs, 
               iso = F, inertia = F, # toggle off outputting two another spatial indicators for now
               density = T) # weight hauls by  density of catch at each sample site (F therefore uses binary presence-absence data)
@@ -213,7 +214,7 @@ head(cg)
 ```
 
 Visualise changes in `cg` over time 
-```{r cg_plot, echo = T, eval = T, dependson = list("data_load", "stk", "esia")}
+```{r cg_plot, echo = T, eval = T}
 cg_p <-cogplot(cg, 
                # set grid = ices_rect for ICES rectangles -- takes time to load
                grid = ices_rect, areas = stk_divs,
@@ -227,7 +228,7 @@ suppressWarnings(ggplotly(cg_p, tooltip = "text"))
 
 Inertia describes the dispersion/variance of the population around its centre of gravity. High values of inertia indicate that the population is widely spread across space.
 
-```{r inert_calc, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+```{r inert_calc, eval = T, echo = T}
 inert <- coginis(hlhh, yrs, qrs, species_aphia, stk_divs, 
               iso = F, inertia = T, # inertia toggled on
               density = T) #
@@ -235,7 +236,7 @@ inert <- coginis(hlhh, yrs, qrs, species_aphia, stk_divs,
 head(inert)
 ```
 Plot the trend over time
-```{r inert_plot, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+```{r inert_plot, eval = T, echo = T}
 in_p <- ggplot(data = inert, aes(x = Year, y = Inertia)) +
   geom_line() +
   geom_point() +
@@ -251,13 +252,13 @@ in_p
 ### **Extent of Occurrence (EOO):** 
 
 A convex hull polygon is drawn around occurrence points (i.e. sample sites with catch of the target species \> 0). EOO is the area of the polygon. High EOO indicates that the population is spread over a large geographical area.
-```{r eoo_calc, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+```{r eoo_calc, eval = T, echo = T}
 eoo <- chullarea(hlhh, yrs, qrs, species_aphia, stk_divs)[1:3] # this function needs tidying up, ignore other columns for now
 head(eoo)
 ```
 
 Plot the trend over time
-```{r eoo_plot, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+```{r eoo_plot, eval = T, echo = T}
 eoo_p <- ggplot(data = eoo, aes(x = Year, y = convex_hull_area)) +
   geom_line() +
   geom_point() +
@@ -274,12 +275,13 @@ eoo_p
 ### **Ellipse Area (ELA):** 
 
 Similar to EOO. But instead of a convex hull, ELA calculates the area of an ellipse that encompasses 95% of the occurrence sites.
-```{r ela_calc, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+```{r ela_calc, eval = T, echo = T}
 print(stk_divs)
 ela <- ellarea(hlhh, yrs, qrs, species_aphia, stk_divs = stk_divs)
 head(ela)
 ```
-```{r ela_plot, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+
+```{r ela_plot, eval = T, echo = T}
 ela_p <- ggplot(data = ela, aes(x = Year, y = `Ellipse Area`)) +
   geom_line() +
   geom_point() +
@@ -300,12 +302,12 @@ Indicates the proportion of area occupied by the target species using binary pre
 #### **Rectangle (POPR):** 
 
 The proportion of the ICES rectangles surveyed with a catch of the target species \> 0.
-```{r popr_calc, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+```{r popr_calc, eval = T, echo = T}
 popr <- pa_rect(hlhh, yrs, qrs, species_aphia, stk_divs)
 head(popr)
 ```
 
-```{r popr_plot, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+```{r popr_plot, eval = T, echo = T}
 popr_p <- ggplot(data = popr, aes(x = Year, y = `PosAreaR`)) +
   geom_line() +
   geom_point() +
@@ -322,12 +324,12 @@ popr_p
 
 The proportion of hauls with catch of the target species \> 0.
 
-```{r poph_calc, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+```{r poph_calc, eval = T, echo = T}
 poph <- pa_haul(hlhh, yrs, qrs, species_aphia, stk_divs)
 head(poph)
 ```
 
-```{r poph_plot, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+```{r poph_plot, eval = T, echo = T}
 poph_p <- ggplot(data = poph, aes(x = Year, y = `PosAreaH`)) +
   geom_line() +
   geom_point() +
@@ -342,7 +344,7 @@ poph_p
 
 ### Plotting 
 The `mapdis()` function visualises the above range and occupancy indicators on a single map for one timepoint (e.g. year and quarter). The function can equally be used to visualise a single indicator. 
-```{r mapdis, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+```{r mapdis, eval = T, echo = T}
 mapdis(hlhh, yrs = 2022, qrs, species_aphia, stk_divs, ices_rect, # data & parameters
        cog = T, inertia = T, EOO = T, ELA = T, # indicator toggles
        density = T, # weight samples 
@@ -358,19 +360,19 @@ mapdis(hlhh, yrs = 2022, qrs, species_aphia, stk_divs, ices_rect, # data & param
 
 Derived from a Lorenz curve. Ranges from 0 to 1, with 1 indicating that the population is uniformly distributed across surveyed rectangles, and 0 indicating that the population was recorded in one rectangle.
 
-```{r lor_data, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+```{r lor_data, eval = T, echo = T}
 lordat <- lorenz_data(hlhh, yrs, qrs, species_aphia, stk_divs)
 lorenz_plot(lordat) + 
   theme_minimal() +
     theme(panel.border = element_rect(colour = "black", fill = NA)) # function needs tidying
 ```
 
-```{r gini_calc, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+```{r gini_calc, eval = T, echo = T}
 gni <- Gini(lordat)
 head(gni)
 ```
 
-```{r gini_plot, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+```{r gini_plot, eval = T, echo = T}
 gni_p <- ggplot(data = gni, aes(x = Year, y = `Gini Index`)) +
   geom_line() +
   geom_point() +
@@ -386,11 +388,11 @@ gni_p
 
 Represents the proportion of the population present in 95% of the area. Ranges from 0 to 0.95, with 0 indicating that all individuals were recorded in 5% of the surveyed area (high aggregation) and 0.95 indicating that 95% of the population were recorded in 95% of the rectangles surveyed (uniform distribution).
 
-```{r d95_calc, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+```{r d95_calc, eval = T, echo = T}
 D <- d95(lordat)
 ```
 
-```{r d95_plot, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+```{r d95_plot, eval = T, echo = T}
 d95_p <- ggplot(data = D, aes(x = Year, y = `D95`)) +
   geom_line() +
   geom_point() +
@@ -407,7 +409,7 @@ d95_p
 
 Derived from cumulative frequency data. Measures the area occupied by the population, taking into account variations in fish density values. High values of SA indicate homogeneous spatial distribution.
 
-```{r sa_calc, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+```{r sa_calc, eval = T, echo = T}
 sa_data <- spreadingarea_data(hlhh, yrs, qrs, species_aphia, stk_divs)
 sa <- sa_data %>%
         group_by(Year) %>%
@@ -417,7 +419,7 @@ sa <- sa_data %>%
 head(sa)
 ```
 
-```{r sa_plot, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+```{r sa_plot, eval = T, echo = T}
 sa_p <- ggplot(data = sa, aes(x = Year, y = `Spreading Area`)) +
   geom_line() +
   geom_point() +
@@ -433,7 +435,7 @@ sa_p
 
 The area that would be covered by a population with homogeneously distributed density. It is equal to the mean density per individual.
 
-```{r ea_calc, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+```{r ea_calc, eval = T, echo = T}
 ea <- sa_data %>%
         group_by(Year) %>%
         summarise("Equivalent Area" = equivalentarea(TotalNo_Dur)) %>%
@@ -442,7 +444,7 @@ ea <- sa_data %>%
 head(ea)
 ```
 
-```{r ea_plot, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+```{r ea_plot, eval = T, echo = T}
 ea_p <- ggplot(data = ea, aes(x = Year, y = `Equivalent Area`)) +
   geom_line() +
   geom_point() +
@@ -459,13 +461,13 @@ ea_p
 
 Compares the observed spatial density distribution to the density distribution expected from a homogeneously distributed population. Ranges from 0 to 1, with 0 indicating that the population was observed in only one ICES rectangle, and 1 indicating that the population density was uniformly distributed across ICES rectangles.
 
-```{r spi_calc, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+```{r spi_calc, eval = T, echo = T}
 SPI <- spi(hlhh, yrs, qrs, species_aphia, stk_divs)[c(1,2,4)] # function needs tidying
 
 head(SPI)
 ```
 
-```{r spi_plot, eval = T, echo = T, dependson = list("data_load", "stk", "esia")}
+```{r spi_plot, eval = T, echo = T}
 spi_p <- ggplot(data = SPI, aes(x = Year, y = `SPI.dur`)) +
   geom_line() +
   geom_point() +
