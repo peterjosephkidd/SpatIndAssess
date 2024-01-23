@@ -1215,7 +1215,375 @@ coginert <- function(hlhh, yrs, qrs, species_aphia, stk_divs){
   return(cgi)
 }
 
-
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+mapdis <- function(hlhh, yrs, qrs, species_aphia, stk_divs, ices_rect,  # data specifics
+                   cog = T, inertia = T, EOO = T, ELA = T, # spatial indicators
+                   density = T,                           # weight cog and inertia
+                   km2lonlat = F,                                  # convert km to lonlat
+                   title = "",                                     # plot title
+                   xlim = NA, ylim = NA){                          # plot bounds                                   
+  #>>>>>>>>>>>>>>>>>>>>> Map Spatial Distribution Indicators >>>>>>>>>>>>>>>>>>>>#
+  #> Function for visualising surveys points where species were found, convex     
+  #> hull area, centre of gravity, inertia ellipse with world map. Filter hlhh    
+  #> before providing it to the function
+  #> 
+  #> Pending...: update to toggle cog, inertia, chull, and ellipse95 on plot
+  #> Pending...: plot stock division boundaries 
+  #> Pending...: add spatind values on plot 
+  #> Pending...: add CPUE units into density      
+  #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+  
+  yrs <- as.numeric(yrs)
+  qrs <- as.numeric(qrs)
+  
+  d2 <- hlhh %>%
+    filter(Area_27 %in% stk_divs,
+           Year %in% c(yrs),
+           Quarter %in% c(qrs),
+           HaulVal != "I") %>%
+    # Remove length data to preven duplication when summing TotalNo
+    select(haul.id, Year, Quarter, HaulNo, StNo, Gear, Ship, Survey, TotalNo, 
+           Valid_Aphia, HaulDur, StatRec, Area_27, ShootLong, ShootLat, HaulVal, Depth) %>%
+    distinct() %>%
+    mutate(colour = if_else(Valid_Aphia == species_aphia, 3, NA))
+  
+  # Check what data is available
+  if(!identical(as.numeric(unique(d2$Quarter)), qrs)){
+    warning(paste0("Data not found in all survey quarters provided. 
+  ", "Only data for quarters ", paste(sort(unique(d2$Quarter)), collapse = ", ")), " available in ", unique(hlhh$Survey.x), " survey data (years ", min(yrs), ":", max(yrs), "), region(s) ", paste0(stk_divs, collapse = ", "), ".
+  ", "No data for quarter ", paste(c(setdiff(qrs, unique(d2$Quarter)), setdiff(unique(d2$Quarter), qrs)), collapse = ", "), "\n", immediate. = TRUE)
+    qrs <- as.numeric(unique(d2$Quarter))
+  }
+  
+  if(!identical(as.numeric(sort(unique(d2$Year))), yrs)){
+    warning(paste0("Species not found in all survey years provided. 
+  ", "No data for years ", paste(c(setdiff(yrs, unique(d2$Year)), setdiff(unique(d2$Year), yrs)), collapse = ", "), " in ", unique(hlhh$Survey.x), " survey data (quarters ", paste(sort(unique(d2$Quarter)), collapse = ", "), "), region(s) ", paste0(stk_divs, collapse = ","), ".\n"), immediate. = TRUE)
+    yrs <- as.numeric(sort(unique(d2$Year)))
+  }
+  
+  # Filter to target species
+  d1 <- d2 %>% 
+    filter(Valid_Aphia == species_aphia) %>%
+    distinct() %>%
+    mutate(TotalNo_Dur = TotalNo/HaulDur)
+  
+  # World Map 
+  world <- map_data("world")
+  worldsf <- sfheaders::sf_polygon(
+    obj = world
+    , x = "long"
+    , y = "lat"
+    , polygon_id = "group"
+  ) 
+  
+  df <- data.frame()
+  # Calculate and plot indicators for each year given
+  for(yr in yrs){
+    
+    # Filter species data to target year
+    dyrly <- d1 %>%
+      filter(Year == yr)
+    # Use Shoot for x&y coordinates
+    x <- dyrly$ShootLong
+    y <- dyrly$ShootLat
+    
+    #>>>>>>>> POPR & POPH >>>>>>>>>#
+    # All survey sites
+    d3 <- d2 %>% 
+      filter(Year == yr) %>% 
+      select(ShootLong, ShootLat, StatRec) %>% 
+      distinct()
+    nsites <- nrow(d3)# number of total survey sites
+    
+    # Survey sites where target species was caught
+    d4 <- dyrly %>%
+      select(ShootLong, ShootLat, StatRec) %>% 
+      distinct()
+    nposhauls <- nrow(d4) # number of hauls with species presence
+    
+    # Survey sites that did not catch target species
+    d5 <- anti_join(d3,d4, by = join_by(ShootLong, ShootLat))
+    d5 <- mutate(d5, `Hauls (POPH)` = "grey30")
+    nabshauls <- nrow(d5) # number of hauls with species absence
+    nposhauls + nabshauls == nsites
+    
+    # ICES rectangles
+    ices_rect2 <- ices_rect %>% 
+      mutate('ICES Rectangles (POPR)' = if_else(ICESNAME %in% d4$StatRec, "3", if_else(ICESNAME %in% d2$StatRec, "2", NA)))
+    
+    # Total Number of rectangles Present/Absent (2= Absent)
+    nrects <- ices_rect2 %>%
+      select(ICESNAME, `ICES Rectangles (POPR)`) %>%
+      distinct() %>%
+      group_by(`ICES Rectangles (POPR)`) %>%
+      na.omit() %>%
+      summarise(n.rects = length(ICESNAME))
+    
+    
+    # Density
+    if(density == TRUE){
+      z <- dyrly$TotalNo_Dur
+    } else{z <- rep(1, length(x))}
+    
+    # Measurement transformation
+    if(km2lonlat){
+      xy <- SpatialEpi::grid2latlong(cbind(x,y))
+      d <- cbind(xy,z)
+    } else{d <- as.data.frame(cbind(x,y,z))}
+    
+    # Add colours into df for scale_fill_identity
+    # Add colour for positive hauls, point size weighted by density
+    d <- mutate(d, `Hauls (POPH)` = "grey10", Density = z) # Scale sample sites by density
+    # Take coordinates of positive hauls for drawing ellipses later
+    coordinates <- d[,c("x", "y")]
+    
+    #>>>>>>>> ELA >>>>>>>>>#
+    if(ELA == T){
+      cord <- as.data.frame(coordinates)
+      # Add colours into df for scale_fill_identity
+      cord <- mutate(cord, `Range Indicator` = "black")
+    }
+    
+    
+    #>>>>>>>> CoG >>>>>>>>>#
+    # Density weighted CoG
+    if(inertia == T | cog == T){
+      cog_x <- sum(d$x*d$z)/sum(d$z)
+      cog_y <- sum(d$y*d$z)/sum(d$z)
+      cog_xy <- as.data.frame(cbind(cog_x, cog_y))
+      # Add shape into df for scale_shape_identity
+      cog_xy <- mutate(cog_xy, `Location Indicator` = 15)
+    } else{cog_xy <- NA}
+    
+    #>>>>>>>> Inertia >>>>>>>>>#
+    if(any(is.na(cog_xy)) & inertia == TRUE){
+      inert <- NaN
+      warning("Cannot calulate inertia: NAs in CoG")
+    } else if(inertia == TRUE){
+      # Inertia
+      dx <- d$x - cog_x
+      dy <- d$y - cog_y
+      ix <- sum((dx^2)*d$z)/sum(d$z)
+      iy <- sum((dy^2)*d$z)/sum(d$z)
+      inert <- ix+iy
+      # Weighted PCA
+      M11 <- sum(dx^2*d$z)
+      M22 <- sum(dy^2*d$z)
+      M21 <- sum(dx*dy*d$z)
+      M12 <- M21
+      M <- matrix(c(M11, M12, M21, M22), ncol = 2)
+      x1 <- eigen(M)$vectors[1, 1]
+      y1 <- eigen(M)$vectors[2, 1]
+      x2 <- eigen(M)$vectors[1, 2]
+      y2 <- eigen(M)$vectors[2, 2]
+      r1 <- eigen(M)$values[1]/(eigen(M)$values[1] + eigen(M)$values[2])
+      # Principal axis coordinates
+      e1 <- (y1/x1)^2
+      sx1 <- x1/abs(x1)
+      sy1 <- y1/abs(y1)
+      sx2 <- x2/abs(x2)
+      sy2 <- y2/abs(y2)
+      xa <- cog_x + sx1 * sqrt((r1 * inert)/(1 + e1))
+      ya <- cog_y + sy1 * sqrt((r1 * inert)/(1 + (1/e1)))
+      xb <- 2 * cog_x - xa
+      yb <- 2 * cog_y - ya
+      xc <- cog_x + sx2 * sqrt(((1 - r1) * inert)/(1 + (1/e1)))
+      yc <- cog_y + sy2 * sqrt(((1 - r1) * inert)/(1 + e1))
+      xd <- 2 * cog_x - xc
+      yd <- 2 * cog_y - yc
+      Imax <- r1*inert 
+      Imin <- (1-r1)*inert
+      isotropy <- sqrt(Imin/Imax)
+      
+      # Inertia Ellipse Points
+      ell <- as.data.frame(car::dataEllipse(c(xa,xb,xc,xd),c(ya,yb,yc,yd), 
+                                            levels = 0.25, draw = F, add = F, robust = T))
+      # Add colours into df for scale_fill_identity
+      ell <- mutate(ell,`Range Indicator` = "blue")
+      
+      # Inertia cross
+      xcros <- rbind(xa,xb,xc,xd)
+      ycros <- rbind(ya,yb,yc,yd)
+      inertcross <- as.data.frame(cbind(xcros, ycros))
+    }
+    
+    #>>>>>>>> Extent of Occurrence >>>>>>>>>#
+    # Combine latitude and longitude into a matrix
+    if(EOO == T){
+      
+      # Calculate the convex hull
+      convex_hull <- chull(coordinates)
+      
+      # Extract the convex hull points
+      convex_hull_points <- as.data.frame(coordinates[convex_hull, ])
+      
+      # Create a SpatialPolygons object from the convex hull points
+      convex_hull_sf <- sfheaders::sf_polygon(
+        obj = convex_hull_points
+        , x = "x"
+        , y = "y"
+      )
+      
+      # Add colours into df for scale_fill_identity
+      convex_hull_sf <- mutate(convex_hull_sf, `Range Indicator` = "orange")
+    }
+    
+    #>>>>>>>> Plot >>>>>>>>>#
+    
+    # Plot area
+    if(any(is.na(xlim))){
+      xlim <- c(min(hlhh$ShootLong), max(hlhh$ShootLong))
+    } else{xlim <- xlim}
+    if(any(is.na(ylim))){
+      ylim <- c(min(hlhh$ShootLat), max(hlhh$ShootLat))
+    } else{ylim <- ylim}
+    
+    # Define legend and plot colours for range indicators
+    rangecolr <- as.data.frame(cbind(spats = c("EOO", "ELA", "Inertia"), 
+                                     labls = c("Extent of Occurrence (EOO)", "Ellipse Area (ELA)", "Inertia"),
+                                     brks = c("orange", "black", "blue"),
+                                     legfill = c("orange", "white", "white"),
+                                     show = c(EOO, ELA, inertia)))
+    rangecolr <- filter(rangecolr, show == T)
+    
+    poprlabs <- c(paste0("Present (N = ", nrects[nrects$`ICES Rectangles (POPR)` == "3",]$n.rects, ")"),
+                  paste0("Absent (N = ", nrects[nrects$`ICES Rectangles (POPR)` == "2",]$n.rects, ")"))
+    
+    pophlabs <- c(paste0("Present (N = ", nposhauls, ")"),
+                  paste0("Absent (N = ", nabshauls, ")"))
+    
+    p <- ggplot() +
+      geom_tile(data = ices_rect2, mapping = aes(x = stat_x, y = stat_y, fill = `ICES Rectangles (POPR)`), stat = "identity", alpha = 0.05, colour = "darkgrey", show.legend = T) +
+      
+      #>>>>>>>>>> POPR >>>>>>>>>>#
+      # ICES rectangles (if both present & absent available)
+      {if(all(c(3,2) %in% unique(ices_rect2$`ICES Rectangles (POPR)`))) list(
+        scale_fill_identity(guide = "legend", breaks = c("3", "2"), labels = poprlabs),
+        guides(fill = guide_legend(override.aes = list(fill = c("green", "red"), 
+                                                       colour = "grey10",
+                                                       alpha = 0.5,
+                                                       shape = 1)))
+      )} +
+      # if only absent rectangles
+      {if(any(c(3,2) %in% unique(ices_rect2$`ICES Rectangles (POPR)`) == FALSE) & any(2 %in% unique(ices_rect2$`ICES Rectangles (POPR)`))) list(
+        message("Species absent in all rectangles. Green 'Present' symbology in legend will be missing. Code does not currently support displaying symbology of features that are not present."),
+        scale_fill_identity(guide = "legend", breaks = c("2"), labels = poprlabs[2]),
+        guides(fill = guide_legend(override.aes = list(fill = c("red"), 
+                                                       colour = "grey10",
+                                                       alpha = 0.5,
+                                                       shape = 1)))
+      )} +
+      # if only present rectangles
+      {if(any(c(3,2) %in% unique(ices_rect2$`ICES Rectangles (POPR)`) == FALSE) & any(3 %in% unique(ices_rect2$`ICES Rectangles (POPR)`))) list(
+        message("Species present in all rectangles. Red 'Absent' symbology in legend will be missing. Code does not currently support displaying symbology of features that are not present."),
+        scale_fill_identity(guide = "legend", breaks = c("3"), labels = poprlabs[1]),
+        guides(fill = guide_legend(override.aes = list(fill = c("green"), 
+                                                       colour = "grey10",
+                                                       alpha = 0.5,
+                                                       shape = 1)))
+      )} +
+      
+      # World map
+      geom_sf(data = worldsf, size = 0.1) + 
+      # ICES Divisions
+      #geom_path(data = ices_divs, mapping = aes(x = long, y = lat, group = group, fill = NULL), color = "black") +
+      
+      #>>>>>>>>>> Convex Hull Polygon (EOO) >>>>>>>>>#
+      {if(EOO == T)list(
+        geom_sf(data = convex_hull_sf, aes(colour = `Range Indicator`), fill = "orange", alpha = 0.1, show.legend = T)
+      )} +
+      
+      #>>>>>>>>>> 95% CI Ellipse (ELA) >>>>>>>>>#
+      {if(ELA == T)list(
+        stat_ellipse(data = cord, aes(x = x, y = y, colour = `Range Indicator`), type = "t")
+      )} + 
+      
+      #>>>>>>>>>> Inertia >>>>>>>>>>#
+      {if(inertia == T)list(
+        stat_ellipse(data = ell, aes(x = x, y = y, colour = `Range Indicator`), level = 0.945, type = "norm"),
+        geom_line(data = inertcross[c(1:2),], aes(x = V1, y = V2), colour = "blue"),
+        geom_line(data = inertcross[c(3:4),], aes(x = V1, y = V2), colour = "blue")
+      )} +
+      
+      # Plot bounds
+      coord_sf(xlim, ylim) +
+      
+      # Range Legend
+      scale_colour_identity(guide = "legend", breaks = rangecolr$brks, labels = rangecolr$labls) +
+      guides(colour = guide_legend(override.aes = list(shape = c(NA),
+                                                       size = c(3),
+                                                       fill = rangecolr$legfill))) +
+      ggnewscale::new_scale_color() +
+      
+      #>>>>>>>>>> Centre of Gravity (CoG) >>>>>>>>>>#
+      {if(cog == T)list(
+        geom_point(data = cog_xy, aes(x= cog_x, y = cog_y, shape = `Location Indicator`), colour = "blue", size = 3), # centre of gravity
+        scale_shape_identity(guide = "legend", labels = "Centre of Gravity (CoG)"),
+        guides(shape = guide_legend(override.aes = list(fill = NA)),
+               size = guide_legend(override.aes = list(fill = NA)))
+      )} +
+      
+      #>>>>>>>>>> POPH >>>>>>>>>>#
+      # Hauls with species presence (size weighted by density)
+      geom_point(data = d, aes(x = x, y = y, size = Density, colour = `Hauls (POPH)`)) +
+      guides(shape = guide_legend(override.aes = list(fill = NA)),
+             size = guide_legend(override.aes = list(fill = NA))) +      
+      
+      # Haul locations where species were absent
+      geom_point(data = d5, aes(x = ShootLong, y = ShootLat, colour = `Hauls (POPH)`), shape = 4) +
+      {if(nrow(d5) > 0) list(
+        scale_colour_identity(guide = "legend", breaks = c("grey10", "grey30"), labels = pophlabs),
+        suppressWarnings(guides(colour = guide_legend(override.aes = list(shape = c(16, 4),
+                                                                          size = c(3,3),
+                                                                          colour = c("grey10", "grey30"),
+                                                                          fill = c("white", "white")))))
+      )} +
+      # If species are present in all hauls
+      {if(nrow(d5) == 0) list(
+        message("Species are present in all hauls. 'Absent' hauls symbology will be removed from legend. Code does not currently support displaying symbology of features that are not present"),
+        scale_colour_identity(guide = "legend", breaks = c("grey10"), labels = pophlabs[1]),
+        guides(colour = guide_legend(override.aes = list(shape = c(16),
+                                                         size = c(3),
+                                                         colour = c("grey10"),
+                                                         fill = c("white"))))
+      )} +
+      # If species are absent in all hauls
+      {if(nrow(d4) == 0) list(
+        message("Species are absent in all hauls. 'Present' hauls symbology will be removed from legend. Code does not currently support displaying symbology of features that are not present"), 
+        scale_colour_identity(guide = "legend", breaks = c("grey10"), labels = pophlabs[2]),
+        guides(colour = guide_legend(override.aes = list(shape = c(4),
+                                                         size = c(3),
+                                                         colour = c("grey30"),
+                                                         fill = c("white"))))
+      )} +
+      # Inertia PCA
+      #geom_line(data = inertcross[c(1:2),], aes(x = V1, y = V2), colour = "blue") +
+      #geom_line(data = inertcross[c(3:4),], aes(x = V1, y = V2), colour = "blue") +
+      # CoG
+      #geom_point(data = cog_xy, aes(x= cog_x, y = cog_y, shape = `Location Indicator`), colour = "blue", size = 3) + # centre of gravity
+      #scale_shape_identity(guide = "legend", labels = "Centre of Gravity (CoG)") +
+      #guides(shape = guide_legend(override.aes = list(fill = NA)),
+      #       size = guide_legend(override.aes = list(fill = NA))) +
+      # Formatting
+      labs(title = title, subtitle = paste0("Year: ", yr, " \nQuarter: ", 
+                                            paste0(as.character(qrs), collapse = ", "), " \nStock Divisions: ", 
+                                            paste0(stk_divs, collapse = ", "))) +
+      xlab("Longitude") +
+      ylab("Latitude") +
+      geom_label(data = data.frame(), aes( 
+        label = paste0("Total ICES Rectangles Surveyed: ", nrects[nrects$`ICES Rectangles (POPR)` == "3",]$n.rects + nrects[nrects$`ICES Rectangles (POPR)` == "2",]$n.rects),
+        x = Inf, y = -Inf), hjust = 1.1, vjust = -3) +
+      geom_label(data = data.frame(), aes(
+        label = paste0("Total Number of Hauls: ", nsites),
+        x = Inf, y = -Inf), hjust = 1.14, vjust = -1.5) +
+      theme_minimal() +
+      theme(
+        panel.border = element_rect(colour = "black", fill = NA)
+      )
+  }
+  return(p)
+}
 
 
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
