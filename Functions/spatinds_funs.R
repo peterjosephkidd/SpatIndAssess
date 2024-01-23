@@ -1571,13 +1571,13 @@ mapdis <- function(hlhh, yrs, qrs, species_aphia, stk_divs, ices_rect,  # data s
                                             paste0(stk_divs, collapse = ", "))) +
       xlab("Longitude") +
       ylab("Latitude") +
-      annotate("rect", xmin = 3.3, xmax = xlim[2]+0.9, ymin = ylim[1]-0.9, ymax = ylim[1]+1, fill = "white", alpha = .5) +
-      geom_text(data = data.frame(), aes( 
-        label = paste0("No. ICES Rectangles Surveyed: ", nrects[nrects$`ICES Rectangles (POPR)` == "3",]$n.rects + nrects[nrects$`ICES Rectangles (POPR)` == "2",]$n.rects),
-        x = Inf, y = -Inf), hjust = 1, vjust = -1.5, size = 3) +
-      geom_text(data = data.frame(), aes(
-        label = paste0("No. of Hauls: ", nsites),
-        x = Inf, y = -Inf), hjust = 1, vjust = -0.5, size = 3) +
+      #annotate("rect", xmin = 5, xmax = xlim[2]+0.9, ymin = ylim[1]-0.9, ymax = ylim[1]+1, fill = "white", alpha = .5) +
+      #geom_text(data = data.frame(), aes( 
+      #  label = paste0("No. ICES Rectangles Surveyed: ", nrects[nrects$`ICES Rectangles (POPR)` == "3",]$n.rects + nrects[nrects$`ICES Rectangles (POPR)` == "2",]$n.rects),
+      #  x = Inf, y = -Inf), hjust = 1, vjust = -1.5, size = 3) +
+      #geom_text(data = data.frame(), aes(
+      #  label = paste0("No. of Hauls: ", nsites),
+      #  x = Inf, y = -Inf), hjust = 1, vjust = -0.5, size = 3) +
       theme_minimal() +
       theme(
         panel.border = element_rect(colour = "black", fill = NA)
