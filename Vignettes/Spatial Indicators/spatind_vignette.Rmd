@@ -80,7 +80,7 @@ Spatial indicators are configured to work with DATRAS survey data. Load in some 
 Here we load NS-IBTS Quarter 1 survey data for years 2018 to 2022. 
 
 ```{r data_load, echo = T, eval = T, cache = T}
-yrs <- c(2020:2022)
+yrs <- c(2000:2022)
 qrs <- c(1)
 srv <- "NS-IBTS"
 
@@ -342,7 +342,7 @@ poph_p <- ggplot(data = poph, aes(x = Year, y = `PosAreaH`)) +
 poph_p
 ```
 
-### Plotting 
+## Map Indicators 
 The `mapdis()` function visualises the above range and occupancy indicators on a single map for one timepoint (e.g. year and quarter). The function can equally be used to visualise a single indicator. 
 ```{r mapdis, eval = T, echo = T}
 mapdis(hlhh, yrs = 2022, qrs, species_aphia, stk_divs, ices_rect, # data & parameters
@@ -481,6 +481,54 @@ spi_p
 ```
 
 [Back to Top](#top)
+
+## Plot Indicator Trends
+Plot all the the timeseries of indicators to visualise and compare trends.
+```{r trend_merge, eval = T, echo = T}
+# List of dfs
+df_list <- list(cg, inert, eoo, ela, popr, poph, gni, D, sa, ea, SPI) 
+
+# Categorise indicators
+loc <- c("CoG (x)", "CoG (y)")
+ran <- c("Inertia", "EOO", "ELA")
+occ <- c("POPR", "POPH")
+agg <- c("Gini Index", "D95", "SA", "EA", "SPI")
+
+# Merge all outputs into a single df
+sidf <- Reduce(function(x, y) merge(x, y, all=TRUE), df_list) %>%
+  select(-c(nrects, nrects_p, no_haul.ids, pr_hauls)) %>% # remove some cols
+  rename(EOO = convex_hull_area,
+         POPR = PosAreaR,
+         POPH = PosAreaH,
+         ELA = `Ellipse Area`,
+         SPI = SPI.dur,
+         SA = `Spreading Area`,
+         EA = `Equivalent Area`) %>%
+  tidyr::pivot_longer(cols = 3:14, names_to = "Indicator", values_to = "Value") %>%
+   mutate(Type = case_when(
+     Indicator %in% loc  ~ "Location",
+     Indicator %in% ran  ~ "Range",
+     Indicator %in% occ  ~ "Occupancy",
+     Indicator %in% agg  ~ "Aggregation")) %>%
+  mutate(Indicator = factor(Indicator, levels = c(loc, ran, occ, agg)))
+
+head(sidf)
+```
+
+```{r trend_plot, eval = T, echo = T}
+ggplot(data = sidf, aes(x = Year, y = Value)) +
+  geom_line(aes(colour = Type)) +
+  scale_x_continuous(breaks = seq(from = min(unique(sidf$Year)), to = max(unique(sidf$Year)), by = 2)) +
+  facet_wrap(vars(Indicator), scales = "free") +
+  theme_minimal() +
+  theme(
+    panel.border = element_rect(colour = "black", fill = NA),
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 6)
+  ) +
+  labs(title = "Spatial Indicator Timeseries",
+       subtitle = ttl(species, stk_divs, srv, qrs, yrs)) +
+  ylab("Indicator Value")
+```
 
 # More Information {#more}
 
