@@ -15,6 +15,8 @@ fig_width: 6
 fig_height: 4 
 tags: FLR FLCore introduction
 license: Creative Commons Attribution-ShareAlike 4.0 International Public License
+bibliography: https://raw.githubusercontent.com/peterjosephkidd/SpatIndAssess/main/References/Refs.SpatindAssess.bib
+
 #knit: (function(inputFile, encoding) {
 #  rmarkdown::render(inputFile, encoding = encoding, output_dir="html")})
 #bibliography: bibliography.bib
@@ -169,15 +171,12 @@ species_aphia <- findAphia(species[2], latin = T)
 stk_divs <- c("4.a", "4.b", "4.c", "3.a.20")
 ```
 
-**Filter data**
 ```{r stk_filter, echo = F, eval = F}
+# Basic checks
 hlhh <- filter(hlhh, 
                Valid_Aphia == species_aphia,
                Area_27 %in% stk_divs)
-```
 
-**Basic checks**
-```{r stk_check, echo = F, eval = F}
 unique(hlhh$Valid_Aphia)
 unique(hlhh$Area_27)
 ```
@@ -186,8 +185,9 @@ unique(hlhh$Area_27)
 ___
 
 # Empirical Spatial Indicator Analysis {#esia}
-
+Suite of spatial indicator functions can be sourced from the `SpatIndAssess` GitHub repo:
 ```{r eval = T, echo = F}
+# Function to create titles
 ttl <- function(species, stk_divs, srv, qrs, yrs){
   paste0(species[1], " (", species[2], ") in ", paste0(stk_divs, collapse = ", "), "\n", srv, " (Q", qrs, ") ", min(yrs), " - ", max(yrs))
 }
@@ -195,15 +195,17 @@ ttl <- function(species, stk_divs, srv, qrs, yrs){
 
 ```{r esia, echo = T, eval = T}
 # Source Spatial Indicator functions from GitHub
-i <- 1
 source("https://raw.githubusercontent.com/peterjosephkidd/SpatIndAssess/main/Functions/spatinds_funs.R", print.eval = F)
 ```
 
 ## Location {#loc}
 
-### **Centre of Gravity (CGx, CGy):**
+### **Centre of Gravity (CoG):**
 
-The mean longitudinal and latitudinal location of the population. Changes in CG indicate whether the mean location of the population is shifting eastward/westward (CGx) or northward/southward (CGy).
+The CoG represents the mean location of the population [@woillez2009notes]. Here, *CoG* is calculated using the `x` and `y` coordinates of haul locations where the target species was identified (i.e. catch > 0). The mean of these `x` and `y` coordinates give *CoG (x)* and *CoG (y)*, respectively, which combine to give the point estimate of the populations mean location. Calculating *CoG* in this manner uses simple binary presence/absence data which ignores fish density at site locations. Instead, information on the number of target fish caught at each sample site can be used to weight the `x` and `y` coordinates in the calculation of *CoG (x)* and *CoG (y)*. As such, sites with high fish density will influence the *CoG* more than sites with low fish density. Whether to treat each sample site with target species catch > 0 as equal or to weight sample sites by fish density can be toggled on/off in `density` argument of the `coginis()` function. It is more typical to weight sites by density, but the option is there.
+
+**An increase in *CoG (x)* indicates a shift Eastward, and increase in *CoG (y)* indicates a shift Northward.** 
+
 
 ```{r cg_calc, echo = T, eval = T}
 cg <- coginis(hlhh, yrs, qrs, species_aphia, stk_divs, 
@@ -212,11 +214,10 @@ cg <- coginis(hlhh, yrs, qrs, species_aphia, stk_divs,
 
 head(cg)
 ```
-
-Visualise changes in `cg` over time 
+\n
+The `cogplot()` function enables you to visualise the geographical trajectory of CoG over time. The resulting plot can also be passed through `ggplotly()` for interactivity and metadata.  
 ```{r cg_plot, echo = T, eval = T}
 cg_p <-cogplot(cg, 
-               # set grid = ices_rect for ICES rectangles -- takes time to load
                grid = ices_rect, areas = stk_divs,
                xlim = c(-2, 6), ylim = c(52, 60)) 
 suppressWarnings(ggplotly(cg_p, tooltip = "text"))
@@ -226,12 +227,13 @@ suppressWarnings(ggplotly(cg_p, tooltip = "text"))
 
 ### **Inertia (I):** 
 
-Inertia describes the dispersion/variance of the population around its centre of gravity. High values of inertia indicate that the population is widely spread across space.
+Inertia is the mean square distance between an individual survey site and the CoG, representing how dispersed the population is around its CoG [@woillez2009notes].  High values of inertia indicate that the population is widely spread across space. As with *CoG*, the inertia can be calculated by weighting samples by fish density. Inertia is therefore also sensitive to high density values [@woillez2009notes].
 
+**An increase in *I* indicates that the population is distributed across a larger geographical region.**
 ```{r inert_calc, eval = T, echo = T}
 inert <- coginis(hlhh, yrs, qrs, species_aphia, stk_divs, 
               iso = F, inertia = T, # inertia toggled on
-              density = T) #
+              density = F) #
 
 head(inert)
 ```
@@ -247,11 +249,13 @@ in_p <- ggplot(data = inert, aes(x = Year, y = Inertia)) +
 
 in_p
 ```
-
+No obvious trend
 
 ### **Extent of Occurrence (EOO):** 
 
-A convex hull polygon is drawn around occurrence points (i.e. sample sites with catch of the target species \> 0). EOO is the area of the polygon. High EOO indicates that the population is spread over a large geographical area.
+EOO is a measure used by the International Union for Conservation of Nature (IUCN), defined as "*the area contained within the shortest continuous imaginary boundary which can be drawn to encompass all the known, inferred or projected sites of present occurrence of a taxon*" [@iucn_2012_eoo]. The `chullarea()` function draws a convex hull polygon around the survey sites with species occurrence and calculates the area of the polygon. Higher EOO indicates that the population is spread over a large geographical area.
+
+**An increase in EOO indicates that that the population is distributed across a larger geographical region.**
 ```{r eoo_calc, eval = T, echo = T}
 eoo <- chullarea(hlhh, yrs, qrs, species_aphia, stk_divs)[1:3] # this function needs tidying up, ignore other columns for now
 head(eoo)
@@ -274,7 +278,9 @@ eoo_p
 
 ### **Ellipse Area (ELA):** 
 
-Similar to EOO. But instead of a convex hull, ELA calculates the area of an ellipse that encompasses 95% of the occurrence sites.
+ELA is similar in principle to EOO. Instead of a convex hull, the `ellarea()` function draws an ellipse around the survey sites with target species occurrence that encompasses 95% of the points. As with other range indicators, higher values indicate that the population is spread over a greater geographical region. ELA and EOO both use simple binary presence/absence data and are not sensitive to density values unlike Inertia. 
+
+**An increase in ELA indicates that that the population is distributed across a larger geographical region.**
 ```{r ela_calc, eval = T, echo = T}
 print(stk_divs)
 ela <- ellarea(hlhh, yrs, qrs, species_aphia, stk_divs = stk_divs)
@@ -295,13 +301,14 @@ ela_p
 
 ## Occupancy {#occ}
 
-### **Proportion of Presence (POP):** 
-
-Indicates the proportion of area occupied by the target species using binary presence-absence data.
+### **Proportion of Presence (POP):**
+The two POP indicators of occupancy reported here are related to the Positive Area indicator noted by @woillez2009notes. Positive Area is the geographical area occupied by the target species where density > 0. 
 
 #### **Rectangle (POPR):** 
+POPR can be seen as a proportion of the Positive Area to the total area sampled. It is the number of ICES rectangles with target species density > 0 (`nrects_p`) relative to the number of ICES rectangles surveyed (`nrects`). 
 
-The proportion of the ICES rectangles surveyed with a catch of the target species \> 0.
+**POPR ranges from 0 to 1 with lower values indicating that a smaller proportion of the surveyed area was occupied by the target species.**
+
 ```{r popr_calc, eval = T, echo = T}
 popr <- pa_rect(hlhh, yrs, qrs, species_aphia, stk_divs)
 head(popr)
@@ -321,9 +328,9 @@ popr_p
 ```
 
 #### **Haul (POPH):** 
+POPH calculates the number of individual hauls with species presence (`pr_hauls`) relative to the total number of hauls (`no.haul.ids`). POPH indicator is spatially implicit and treats hauls as area. Therefore, hauls must be well spatially distributed across the stock area for POPH to be informative (i.e. representative survey design). Both POPH and POPR are spatially implicit in that the geographical coordinates in which the hauls or rectangles with density > 0 occur does not influence calculation. 
 
-The proportion of hauls with catch of the target species \> 0.
-
+**POPH ranges from 0 to 1 with lower values indicating that species were found in a smaller proportion of hauls.**
 ```{r poph_calc, eval = T, echo = T}
 poph <- pa_haul(hlhh, yrs, qrs, species_aphia, stk_divs)
 head(poph)
@@ -357,16 +364,23 @@ mapdis(hlhh, yrs = 2022, qrs, species_aphia, stk_divs, ices_rect, # data & param
 ## Aggregation {#agg}
 
 ### **Gini Index:** 
+Both the Gini Index and D95 are derived from a Lorenz curve. A Lorenz curve plots the cumulative proportion of areas against the cumulative proportion of biomass (e.g. @myers_flatfish_gini_1990). Survey data can be processed with the `lorenz_data()` function data in the format required to plot the Lorenz curve and calculate indicators. `lorenz_plot()` is used to produce the Lorenz curves for each year in the data. E.g.:
 
-Derived from a Lorenz curve. Ranges from 0 to 1, with 1 indicating that the population is uniformly distributed across surveyed rectangles, and 0 indicating that the population was recorded in one rectangle.
-
+###### {#lorplot}
 ```{r lor_data, eval = T, echo = T}
 lordat <- lorenz_data(hlhh, yrs, qrs, species_aphia, stk_divs)
 lorenz_plot(lordat) + 
   theme_minimal() +
-    theme(panel.border = element_rect(colour = "black", fill = NA)) # function needs tidying
+    theme(panel.border = element_rect(colour = "black", fill = NA)) + # function needs tidying
+  geom_label(data = data.frame(), aes(label = "A", x = 0.6, y = 0.3)) +
+  geom_label(data = data.frame(), aes(label = "B", x = 0.9, y = 0.125))
+
 ```
 
+If population biomass is homogeneously distributed across ICES rectangles, the Lorenz curve would be equal to the identity function. If population biomass is highly concentrated in a few ICES rectangles (relative to the total sampled), then the Lorenz curve bends toward the bottom right of the plot. The Gini index is the two times the area between the identity function and the Lorenz curve (`A`).
+
+$$\text{Gini} = \frac{A}{A+B} = \frac{A}{0.5} = 2A$$
+For consistency with other aggregation indicators the Gini index reported from the `Gini()` function is equal to 1-Gini Index such that **lower values indicate concentration and higher values indicate a homogeneous distribution**. This is therefore equal to two times area below the Lorenz curve (2B).
 ```{r gini_calc, eval = T, echo = T}
 gni <- Gini(lordat)
 head(gni)
@@ -385,8 +399,9 @@ gni_p
 ```
 
 ### **D95:** 
+We have adapted D95 from @rindorf2012 to represent the proportion of biomass found in 95% of the surveyed area. D95 can be derived from the [Lorenz curve](#lorplot) as the point where the Lorenz curve intersects the *vertical* black line. The choice of 0.95 is somewhat arbitrary and any value between 0 and 1 can be chosen. The `level` argument of the `d95()` function allows you to change this (e.g. level = 0.5 for D50).
 
-Represents the proportion of the population present in 95% of the area. Ranges from 0 to 0.95, with 0 indicating that all individuals were recorded in 5% of the surveyed area (high aggregation) and 0.95 indicating that 95% of the population were recorded in 95% of the rectangles surveyed (uniform distribution).
+**D95 ranges from 0 to 0.95, with 0 indicating that all individuals were recorded in 5% of the surveyed area (high aggregation) and 0.95 indicating that 95% of the population were recorded in 95% of the rectangles surveyed (uniform distribution)**.
 
 ```{r d95_calc, eval = T, echo = T}
 D <- d95(lordat)
@@ -407,7 +422,9 @@ d95_p
 
 ### **Spreading Area (SA):**
 
-Derived from cumulative frequency data. Measures the area occupied by the population, taking into account variations in fish density values. High values of SA indicate homogeneous spatial distribution.
+SA is another indicator documented in @woillez2009notes and is similar to the Gini index. SA is two times the area below the Lorenz curve - notice that this is the same definition of 1-Gini index. The difference is in the y-axis of the Lorenz curve. For SA, the y-axis represents the cumulative area occupied as opposed to the cumulative **proportion** of area occupied [in the Gini index above](#lorplot). By changing the y-axis scale from a proportion to raw units (e.g. km), the SA is not influenced by zero density values. 
+
+**Higher SA values indicate the population biomass is more uniformly distributed. Lower values indicates higher aggregation.**
 
 ```{r sa_calc, eval = T, echo = T}
 sa_data <- spreadingarea_data(hlhh, yrs, qrs, species_aphia, stk_divs)
@@ -433,7 +450,9 @@ sa_p
 
 ### **Equivalent Area (EA):** 
 
-The area that would be covered by a population with homogeneously distributed density. It is equal to the mean density per individual.
+EA is the area that would be covered by a population with homogeneously distributed density (@bez2001, @woillez2009notes). It is a ratio of the total abundance to the mean density per individual (see @bez2001 for more details on its calculation). 
+
+**Higher EA values indicate the population biomass is more uniformly distributed. Lower values indicates higher aggregation.**
 
 ```{r ea_calc, eval = T, echo = T}
 ea <- sa_data %>%
@@ -458,8 +477,7 @@ ea_p
 
 
 ### **Spread of Participation Index (SPI):** 
-
-Compares the observed spatial density distribution to the density distribution expected from a homogeneously distributed population. Ranges from 0 to 1, with 0 indicating that the population was observed in only one ICES rectangle, and 1 indicating that the population density was uniformly distributed across ICES rectangles.
+The SPI compares the observed fish density in each rectangle to what would be expected from a homogeneously distributed population [@plowman2003]. Again, SPI value is 1-SPI (henceforth referred to as just SPI) for consistency with other indicators that higher values equates to uniformity. SPI therefore ranges from 0 to 1, with 0 indicating that the population is highly aggregated.
 
 ```{r spi_calc, eval = T, echo = T}
 SPI <- spi(hlhh, yrs, qrs, species_aphia, stk_divs)[c(1,2,4)] # function needs tidying
@@ -559,4 +577,3 @@ ggplotly(p)
 
 # References {#references}
 
-[Back to Top](#top)
