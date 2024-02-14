@@ -22,6 +22,11 @@
 #>
 #> Pending changes:
 #>
+#> Convert measurements or areas to km2 and add units to y-axes *****
+#> needs to be done for EOO, ELA, SA, EA
+#>
+#>
+#>
 #> 1. filtersurveydata()
 #>> hlhh data is filtered within each spatind function. Create function that
 #>> filters data then pass the resulting dataset to spatind funs rather than

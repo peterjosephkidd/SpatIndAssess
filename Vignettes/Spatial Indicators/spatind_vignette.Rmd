@@ -355,7 +355,7 @@ The `mapdis()` function visualises the above range and occupancy indicators on a
 mapdis(hlhh, yrs = 2022, qrs, species_aphia, stk_divs, ices_rect, # data & parameters
        cog = T, inertia = T, EOO = T, ELA = T, # indicator toggles
        density = T, # weight samples 
-       title = "Plaice (Pleuronected platessa)\nNS-IBTS", 
+       title = "Plaice (Pleuronectes platessa)\nNS-IBTS", 
        xlim = c(-5,11), ylim = c(50, 62)) # plotting window
          
 ```
