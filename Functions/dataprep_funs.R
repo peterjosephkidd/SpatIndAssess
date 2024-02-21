@@ -131,3 +131,32 @@ makeReadableFortify <- function(shapefile) {
   shapefile.df <- left_join(shapefile.points, shapefile@data, by = "id")
   return(shapefile.df)
 }
+
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+file_metadata <- function(url) {
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Spatial fortify >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+#> Gets metadata from GitHub 
+#> Code from: 
+#> https://stackoverflow.com/questions/73952017/get-metadata-on-csv-file-in-a-github-repo-with-r-i-e-file-info-but-for-onlin
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+  
+  page <- read_html(url)
+  
+  file <- tail(strsplit(url, "/")[[1]], 1)
+  div1 <- "text-mono f6 flex-auto pr-3 flex-order-2 flex-md-order-1"
+  
+  size <- page %>%
+    html_elements(xpath = paste0("//div[@class='", div1, "']")) %>%
+    html_text() %>%
+    strsplit("\n") %>%
+    sapply(trimws) %>%
+    getElement(5)
+  
+  last_commit <- page %>% 
+    html_elements("relative-time") %>% 
+    html_attr("datetime") %>%
+    as.POSIXct()
+  
+  data.frame(file, size, last_commit)
+}

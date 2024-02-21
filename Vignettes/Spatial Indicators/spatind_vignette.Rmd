@@ -82,7 +82,7 @@ Spatial indicators are configured to work with DATRAS survey data. Load in some 
 Here we load NS-IBTS Quarter 1 survey data for years 2018 to 2022. 
 
 ```{r data_load, echo = T, eval = T, cache = T}
-yrs <- c(2000:2022)
+yrs <- c(2000:2005)
 qrs <- c(1)
 srv <- "NS-IBTS"
 
@@ -173,12 +173,12 @@ stk_divs <- c("4.a", "4.b", "4.c", "3.a.20")
 
 ```{r stk_filter, echo = F, eval = F}
 # Basic checks
-hlhh <- filter(hlhh, 
+hlhh.check <- filter(hlhh, 
                Valid_Aphia == species_aphia,
                Area_27 %in% stk_divs)
 
-unique(hlhh$Valid_Aphia)
-unique(hlhh$Area_27)
+unique(hlhh.check$Valid_Aphia)
+unique(hlhh.check$Area_27)
 ```
 [Back to Top](#top)
 
