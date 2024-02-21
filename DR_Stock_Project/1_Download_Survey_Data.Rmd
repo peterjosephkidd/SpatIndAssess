@@ -72,6 +72,7 @@ save(ices_divs, file = paste0(getwd(), "/Data/ICES Divs/ices_divs.rds"))
 ```{r}
 #### Save location
 surveydata.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/DATRAS/Spatial Indicator R Project/Survey Data/"
+surveydata.path <- "C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/spatind-1/boot/initial/data/surveys"
 ### Create directory for survey data
 if(dir.exists(surveydata.path) == FALSE){
   dir.create(surveydata.path)
