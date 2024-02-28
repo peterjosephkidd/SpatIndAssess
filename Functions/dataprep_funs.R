@@ -160,3 +160,47 @@ file_metadata <- function(url) {
   
   data.frame(file, size, last_commit)
 }
+
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+filter_to_matures <- function(data, species = "Target", species_aphia, L50, is.hlhh = TRUE){
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+#> data: can be CA, HL or HLHH. Intended for HLHH
+#> species: character string (can be anything, is just used for reference)
+#> species_aphia: Valid_Aphia of the species
+#> L50: the length below which are masked out, to identify matures
+#> is.hlhh: boolean
+#> 
+#> Note: data is not actually filtered, but produces a mask to allow filtering
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+  
+  data$TrgtSpcs <- species
+  data$TrgtSpcsL50 <- if_else(data$Valid_Aphia == species_aphia, L50, NA)
+  data$TrgtSpcsMature <- if_else(data$LngtClass >= data$TrgtSpcsL50 & data$Valid_Aphia == species_aphia, 1, if_else(data$LngtClass < data$TrgtSpcsL50 & data$Valid_Aphia == species_aphia, 0, NA))
+  
+  if(is.hlhh == TRUE){
+    data <- data %>% 
+      group_by(haul.id, Valid_Aphia) %>%
+      mutate(TotalNoMature = sum(HLNoAtLngt[TrgtSpcsMature == 1]),
+             PropMature = TotalNoMature/TotalNo)
+  }
+  
+  return(data)
+  
+}
+
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+namefile <- function(stk = NA, data, f = NA, r = NA, ext = ".rds"){
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+  if(is.na(f)){
+    f <- unique(data$Survey)
+  }
+  if(is.na(r)){
+    r <- unique(data$RecordType)
+  }
+  y <- paste0(min(data$Year), "-", max(data$Year))
+  q <- paste0("Q", unique(data$Quarter), collapse = ".")
+  n <- paste0(f,".Yr",y,".",q,".",r, "--", stk, ext)
+  return(n)
+}
