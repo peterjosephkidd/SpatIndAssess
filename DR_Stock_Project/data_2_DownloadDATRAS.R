@@ -29,6 +29,7 @@ stksurveys_full <- stksurveys %>%
   na.omit() %>%
   filter(SurveyAcronymn %in% datrassrvys) %>%
   print(n = nrow(.))
+save(stksurveys_full, file = paste0(save.path, "icesData-stksurveys_full.rds"))
 
 # Method 1: Surveys within each stock >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # This method is inefficient when downloading data for many stocks. 
