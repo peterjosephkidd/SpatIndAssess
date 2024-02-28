@@ -14,188 +14,152 @@ rm(list = ls())
 
 load.path <- "~/OneDrive - CEFAS/Projects/C8503B/PhD/SpatIndAssess(GIT)/SpatIndAssess/Data/DR_Stocks/icesSA_data/"
 save.path <- "~/OneDrive - CEFAS/Projects/C8503B/PhD/SpatIndAssess(GIT)/SpatIndAssess/Data/DR_Stocks/SurveyData/"
-
-namefile <- function(stk = NA, data, f = NA, r = NA, ext = ".rds"){
-  if(is.na(f)){
-    f <- unique(data$Survey)
-  }
-  if(is.na(r)){
-    r <- unique(data$RecordType)
-  }
-  y <- paste0(min(data$Year), "-", max(data$Year))
-  q <- paste0("Q", unique(data$Quarter), collapse = ".")
-  n <- paste0(f,".Yr",y,".",q,".",r, "--", stk, ext)
-  return(n)
-}
+source("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/SpatIndAssess(GIT)/SpatIndAssess/Functions/dataprep_funs.R")
 
 stksurveys <- read_xlsx(paste0(load.path, "icesData-31stks-AY2022-stksurveys-optim.xlsx"), sheet = "Surveys")
 
-dummy <- data.frame(StockKeyLabel = rep("dummy.stock", 2), 
-                    SpeciesCommonName = rep("Dummy",2), 
-                    SpeciesScientificName = rep("Dummus",2), 
-                    SurveyAcronymn = c("NS-IBTS", "SNS"),
-                    YearStart = c(2000, 2004),
-                    YearEnd = c(2001, 2005),
-                    Quarter = c(1, 3))
+# Stock with enough info to run code
+# AVailable surveys in DATARS:
+datrassrvys <- c("BITS", "BTS", "BTS-GSA17", "BTS-VIII", "Can-Mar", "DWS", "DYFS", "EVHOE", "FR-CGFS", "FR-WCGFS",
+"IE-IAMS", "IE-IGFS", "IS-IDPS", "NIGFS", "NL-BSAS", "NS-IBTS", "NS-IBTS_UNIFtest", "NS-IDPS", "NSSS", "PT-IBTS",
+"ROCKALL", "SCOROC", "SCOWCGFS", "SE-SOUND", "SNS", "SP-ARSA", "SP-NORTH", "SP-PORC", "SWC-IBTS")
 
-stksurveys <- full_join(stksurveys, dummy, by = c(colnames(dummy)))
+stksurveys_full <- stksurveys %>%
+  select(-c(Ship, Country, YrsExclude, Ages, inRcntStkAnX, inMatCalc, MatYrs, Usage, Notes, `Full Name`)) %>%
+  na.omit() %>%
+  filter(SurveyAcronymn %in% datrassrvys) %>%
+  print(n = nrow(.))
 
-# Loop through all
-stks <- unique(stksurveys$StockKeyLabel)
-# One stock at a time otherwise function stalls
-stk <- "dummy.stock"
+# Method 1: Surveys within each stock >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+# This method is inefficient when downloading data for many stocks. 
+# Some surveys will be downloaded numerous times (e.g. NS-IBTS, EVHOE)
+# See method 2
 
-allsrvys <- stksurveys %>%
-  select(SurveyAcronymn, SurveyRefNo, YearStart, YearEnd, Quarter) %>%
-  group_by(SurveyAcronymn, Quarter) %>%
-  mutate(minYr = min(YearStart), maxYr = max(YearEnd)) %>%
-  distinct()
-allsrvys %>% arrange(SurveyAcronymn) %>%
-  print(n = nrow(allsrvys))
-
-srvys <- stksurveys %>%
-  filter(StockKeyLabel == stk) %>%
-  select(SurveyAcronymn, SurveyRefNo, SurveyIndex, YearStart, YearEnd, Quarter)
-
-srvy.list <- unique(srvys$SurveyAcronymn)
-
-suppressWarnings(dir.create(paste0(save.path, stk, "/raw"), recursive = T))
-
-# One survey at a time
-srvy <- srvy.list[2] # have manually change, messes up in for loop
-
-srvys.filt <- srvys[srvys$SurveyAcronymn == srvy,]
-
-qrs <- unique(srvys.filt$Quarter)
-yrs <- min(srvys.filt$YearStart, na.rm = T):max(srvys.filt$YearEnd, na.rm = T)
-
-hh <- data.frame()
-hl <- data.frame()
-ca <- data.frame()
-
-hh.df <- try(getDATRAS(record = "HH", srvy, years = yrs, quarters = c(qrs)))
-hl.df <- try(getDATRAS(record = "HL", srvy, years = yrs, quarters = c(qrs)))
-ca.df <- try(getDATRAS(record = "CA", srvy, years = yrs, quarters = c(qrs)))
-
-hh <- rbind(hh, hh.df)
-hl <- rbind(hl, hl.df)
-ca <- rbind(ca, ca.df)
+stks <- unique(stksurveys_full$StockKeyLabel)
+save(stks, file = paste0(save.path, "/stks.rds")) # save stks for later scripts
+stks <- "ank.27.78abd"
   
-save(hh, file = paste0(save.path, stk, "/raw/", namefile(stk, hh)))
-save(hl, file = paste0(save.path, stk, "/raw/", namefile(stk, hl)))
-save(ca, file = paste0(save.path, stk, "/raw/", namefile(stk, ca)))
-
-  
-  
-###########
-for(j in 1:length(stks)){
-  
-  stk <- stks[j]
+for (i in 1:length(stks)) {
+  stk <- stks[i]
   message(stk)
+  
   srvys <- stksurveys %>%
     filter(StockKeyLabel == stk) %>%
     select(SurveyAcronymn, SurveyRefNo, SurveyIndex, YearStart, YearEnd, Quarter)
   
+  head(srvys)
+  
   srvy.list <- unique(srvys$SurveyAcronymn)
-  message(paste0(srvy.list, collapse = ", "))  
   
+  suppressWarnings(dir.create(paste0(save.path, stk, "/raw"), recursive = T))
   
-  for(i in 1:length(srvy.list)){
-    srvy <- srvy.list[i]
+  for (j in 1:length(srvy.list)) {
+    
+    srvy <- srvy.list[j] 
+    message(srvy)
     
     srvys.filt <- srvys[srvys$SurveyAcronymn == srvy,]
+    head(srvys.filt)
     
-    qrs <- unique(srvys.filt$Quarter)
+    qrs <- sort(unique(srvys.filt$Quarter))
     yrs <- min(srvys.filt$YearStart, na.rm = T):max(srvys.filt$YearEnd, na.rm = T)
+    qrs
+    yrs
     
-    message(paste0("Downloading ", srvy, ", ", min(yrs), "-", max(yrs), ", Qrs ", paste0(qrs, collapse = ", ")))
+    hh <- data.frame()
+    hl <- data.frame()
+    ca <- data.frame()
     
-    hh.df <- data.frame()
-    hl.df <- data.frame()
-    ca.df <- data.frame()
+    hh.df <- try(getDATRAS(record = "HH", srvy, years = yrs, quarters = c(qrs)))
+    hl.df <- try(getDATRAS(record = "HL", srvy, years = yrs, quarters = c(qrs)))
+    ca.df <- try(getDATRAS(record = "CA", srvy, years = yrs, quarters = c(qrs)))
     
-    for(yr in yrs){
+    hh <- rbind(hh, hh.df)
+    hl <- rbind(hl, hl.df)
+    ca <- rbind(ca, ca.df)
+    
+    table(hh$Year, hh$Quarter)
+    table(hl$Year, hl$Quarter)
+    table(ca$Year, ca$Quarter)
       
-      print(yr)
-      
-      message("\nHH")
-      hh <- try(getDATRAS(record = "HH", srvy, years = yr, quarters = c(qrs)))
-      
-      message("\nHL")
-      hl <- try(getDATRAS(record = "HL", srvy, years = yr, quarters = c(qrs)))
-      
-      message("\nCA")
-      ca <- try(getDATRAS(record = "CA", srvy, years = yr, quarters = c(qrs)))
-      
-      if(!is.null(dim(hh))){
-        hh.df <- rbind(hh.df, hh)
-      }
-      
-      if(!is.null(dim(hl))){
-        hl.df <- rbind(hl.df, hl)
-      }
-      
-      if(!is.null(dim(ca))){
-        ca.df <- rbind(ca.df, ca)
-      }
-      
-      
-    }
-    
-    # Retry years that did not get downloaded
-    hh.yrs <- yrs[!yrs %in% unique(hh.df$Year)]
-    hl.yrs <- yrs[!yrs %in% unique(hl.df$Year)]
-    ca.yrs <- yrs[!yrs %in% unique(ca.df$Year)]
-    
-    if(!is.null(dim(hh.yrs))){
-      message("\nHH retry")
-      hh2 <- try(getDATRAS(record = "HH", srvy, years = hh.yrs, quarters = c(qrs)))
-    }
-    
-    if(!is.null(dim(hl.yrs))){
-      message("\nHL retry")
-      hl2 <- try(getDATRAS(record = "HL", srvy, years = hl.yrs, quarters = c(qrs)))
-    }
-    
-    if(!is.null(dim(ca.yrs))){
-      message("\nCA retry")
-      ca2 <- try(getDATRAS(record = "CA", srvy, years = ca.yrs, quarters = c(qrs)))
-    }
-    
-    if(hh2 != F){
-      hh.df <- rbind(hh.df, hh2)
-    }
-    if(hl2 != F){
-      hl.df <- rbind(hl.df, hl2)
-    }
-    if(ca2 != F){
-      ca.df <- rbind(ca.df, ca2)
-    }
-    
-    # Check years
-    if(any(!yrs %in% unique(hh.df$Year))){
-      warning(paste0("Years not downloaded for HH: \n"), paste0(yrs[!yrs %in% unique(hh.df$Year)], collpase = " "))
-    }
-    
-    if(any(!yrs %in% unique(hl.df$Year))){
-      warning(paste0("Years not downloaded for HL: \n"), paste0(yrs[!yrs %in% unique(hl.df$Year)], collpase = " "))
-    }
-    
-    if(any(!yrs %in% unique(ca.df$Year))){
-      warning(paste0("Years not downloaded for HH: \n"), paste0(yrs[!yrs %in% unique(ca.df$Year)], collpase = " "))
-    }
-    
-    save(hh.df, file = paste0(save.path, stk, "/raw/", namefile(stk, hh.df)))
-    save(hl.df, file = paste0(save.path, stk, "/raw/", namefile(stk, hl.df)))
-    save(ca.df, file = paste0(save.path, stk, "/raw/", namefile(stk, ca.df)))
-    
+    save(hh, file = paste0(save.path, stk, "/raw/", namefile(stk, hh)))
+    save(hl, file = paste0(save.path, stk, "/raw/", namefile(stk, hl)))
+    save(ca, file = paste0(save.path, stk, "/raw/", namefile(stk, ca)))
   }
 }
 
-yrs[!yrs %in% unique(hh.df$Year)]
-yrs[!yrs %in% unique(hl.df$Year)]
-yrs[!yrs %in% unique(ca.df$Year)]
+# Method 2: All Surveys >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+# This method downloads each survey once only, 
+# instead of repeating downloads of the same surveys
 
-hh3 <- try(getDATRAS(record = "HH", srvy, years = yrs[!yrs %in% unique(hh.df$Year)], quarters = c(qrs)))
-hl3 <- try(getDATRAS(record = "HL", srvy, years = yrs[!yrs %in% unique(hl.df$Year)], quarters = c(qrs)))
-ca3 <- try(getDATRAS(record = "CA", srvy, years = yrs[!yrs %in% unique(ca.df$Year)], quarters = c(qrs)))
+allsrvys2 <- stksurveys %>%
+  select(SurveyAcronymn, SurveyRefNo, YearStart, YearEnd, Quarter) %>%
+  group_by(SurveyAcronymn, Quarter) %>%
+  mutate(minYr = min(YearStart), maxYr = max(YearEnd)) %>%
+  distinct()
+
+allsrvys <- allsrvys2 %>% 
+  arrange(SurveyAcronymn) %>%
+  select(-YearStart, -YearEnd, -SurveyRefNo) %>%
+  group_by(SurveyAcronymn) %>%
+  mutate(Quarters = paste0(sort(unique(Quarter)), collapse = ", "),
+         minYr = min(minYr), maxYr = max(maxYr)) %>%
+  select(-Quarter) %>%
+  distinct() %>%
+  filter(SurveyAcronymn %in% datrassrvys) %>%
+  mutate(minYr    = if_else(is.na(minYr), 1980, minYr),
+         maxYr    = if_else(is.na(maxYr), 2023, maxYr),
+         Quarters = if_else(is.na(Quarters), "1, 2, 3, 4", Quarters)) %>%
+  print(n = nrow(allsrvys))
+
+stk <- "all.stocks"
+suppressWarnings(dir.create(paste0(save.path, stk, "/raw"), recursive = T))
+
+surveysummary <- data.frame()
+
+for(i in 1:nrow(allsrvys)){
+  
+  srv <- allsrvys[i,]$SurveyAcronymn
+  yrs <- allsrvys[i,]$minYr:allsrvys[i,]$maxYr
+  qrs <- as.integer(unlist(strsplit(allsrvys[i,]$Quarters, ", ")))
+  
+  hh <- try(getDATRAS(record = "HH", srv, years = yrs, quarters = c(qrs)))
+  hl <- try(getDATRAS(record = "HL", srv, years = yrs, quarters = c(qrs)))
+  ca <- try(getDATRAS(record = "CA", srv, years = yrs, quarters = c(qrs)))
+  
+  save(hh, file = paste0(save.path, stk, "/raw/", namefile(stk, hh)))
+  save(hl, file = paste0(save.path, stk, "/raw/", namefile(stk, hl)))
+  save(ca, file = paste0(save.path, stk, "/raw/", namefile(stk, ca)))
+  
+  
+  for (j in 1:length(qrs)) {
+    
+    rhh <- unique(hh$RecordType)
+    qhh <- unique(hh$Quarter)[j]
+    yrminhh <- min(yrs)
+    yrmaxhh <- max(yrs)
+    yrmisshh <- paste0(yrs[!yrs %in% unique(hh[hh$Quarter == j,]$Year)], collapse = " ")
+    if(yrmisshh == paste(yrs, collapse = " ")){yrmisshh = "All"}
+    hhsum <- cbind("Survey" = srv, "RecordType" = rhh, "QuarterReq" = qhh, "YearMinReq" = yrminhh, "YearMaxReq" = yrmaxhh, "YearMiss" = yrmisshh)
+    
+    rhl <- unique(hl$RecordType)
+    qhl <- qrs[j]
+    yrminhl <- min(yrs)
+    yrmaxhl <- max(yrs)
+    yrmisshl <- paste0(yrs[!yrs %in% unique(hl[hl$Quarter == j,]$Year)], collapse = " ")
+    if(yrmisshl == paste(yrs, collapse = " ")){yrmisshl = "All"}
+    hlsum <- cbind("Survey" = srv, "RecordType" = rhl, "QuarterReq" = qhl, "YearMinReq" = yrminhl, "YearMaxReq" = yrmaxhl, "YearMiss" = yrmisshl)
+    
+    rca <- unique(ca$RecordType)
+    qca <- unique(ca$Quarter)[j]
+    yrminca <- min(yrs)
+    yrmaxca <- max(yrs)
+    yrmissca <- paste0(yrs[!yrs %in% unique(ca[ca$Quarter == j,]$Year)], collapse = " ")
+    if(yrmissca == paste(yrs, collapse = " ")){yrmissca = "All"}
+    casum <- cbind("Survey" = srv, "RecordType" = rca, "QuarterReq" = qca, "YearMinReq" = yrminca, "YearMaxReq" = yrmaxca, "YearMiss" = yrmissca)
+    
+    surveysummary <- rbind(surveysummary, hhsum, hlsum, casum)
+  }
+}
+
+surveysummary
