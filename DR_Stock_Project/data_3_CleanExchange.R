@@ -9,6 +9,7 @@ library(readxl)
 library(icesDatras)
 library(icesVocab)
 library(dplyr)
+library(stringr)
 
 rm(list = ls())
 
@@ -22,79 +23,40 @@ sa_data    <- read_xlsx(paste0(load.path, "icesSA_data/icesData-31stks-AY2022-SA
 
 load("~/OneDrive - CEFAS/Projects/C8503B/PhD/spatind-1/boot/initial/data/ices_shp/ICES Divs/ices_divs.rds")
 load("~/OneDrive - CEFAS/Projects/C8503B/PhD/spatind-1/boot/initial/data/ices_shp/ICES Rect/ices_rect.rds")
+source("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/SpatIndAssess(GIT)/SpatIndAssess/Functions/dataprep_funs.R")
 
-namefile <- function(stk = NA, data, f = NA, r = NA, ext = ".rds"){
-  if(is.na(f)){
-    f <- unique(data$Survey)
-  }
-  if(is.na(r)){
-    r <- unique(data$RecordType)
-  }
-  y <- paste0(min(data$Year), "-", max(data$Year))
-  q <- paste0("Q", unique(data$Quarter), collapse = ".")
-  n <- paste0(f,".Yr",y,".",q,".",r, "--", stk, ext)
-  return(n)
-}
-
-dummy <- data.frame(StockKeyLabel = rep("dummy.stock", 2), 
-                    SpeciesCommonName = rep("Dummy",2), 
-                    SpeciesScientificName = rep("Dummus",2), 
-                    SurveyAcronymn = c("NS-IBTS", "SNS"),
-                    YearStart = c(2000, 2003),
-                    YearEnd = c(2005, 2006),
-                    Quarter = c(1, 3))
-
-stksurveys <- full_join(stksurveys, dummy, by = c(colnames(dummy)))
-
-# Loop through all
-stks <- unique(refpts$StockKeyLabel)
-# ... or just one stock
-#stks <- "dummy.stock"
-
-# Valid_Aphia ####
-va <- c()
-for(i in 1:length(stks)){
-  stk <- stks[i]
-  species <- refpts %>% filter(
-    StockKeyLabel == stk) %>%
-    select(SpeciesCommonName, SpeciesScientificName)
-  Valid_Aphia <- findAphia(species$SpeciesScientificName, latin = TRUE) # get valid aphia
-  output <- cbind(StockKeyLabel = stk, species, Valid_Aphia)
-  va <- rbind(va, output)
-  rm(species, stk, Valid_Aphia, output)
-}
-
-stksurveys <- merge(stksurveys,  va, by = c("StockKeyLabel", "SpeciesCommonName", "SpeciesScientificName"))
-refpts     <- merge(refpts,      va, by = c("StockKeyLabel", "SpeciesCommonName", "SpeciesScientificName"))
-sa_data    <- merge(sa_data,     va, by = c("StockKeyLabel", "SpeciesCommonName", "SpeciesScientificName"))
-
-
-# ... or just one stock
-stks <- "dummy.stock"
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+load(paste0(save.path, "/stks.rds")) # saved stks from data_2_DownloadDATRAS
+stks <- "ank.27.78abd"               # method 1, to individual stocks
+stks <- "all.stocks"                 # method 2
 
 # Clean data ####
-for(i in 1:length(stks)){
+for (i in 1:length(stks)) {
   stk <- stks[i]
   message(stk)
   
+  
+  if(stk == "all.stocks") {
+    srvy.list <- unique(str_split_i(list.files(paste0(load.path, "SurveyData/", stk, "/raw/")), pattern = ".Yr", i=1))
+  } else {
+    srvys <- stksurveys %>%
+      filter(StockKeyLabel == stk) %>%
+      select(SpeciesCommonName, SurveyAcronymn, SurveyRefNo, SurveyIndex, YearStart, YearEnd, Quarter)
+    srvy.list <- unique(srvys$SurveyAcronymn)
+  }
+  
   suppressWarnings(dir.create(paste0(save.path, stk, "/clean"), recursive = T))
-  
-  srvys <- stksurveys %>%
-    filter(StockKeyLabel == stk) %>%
-    select(SpeciesCommonName, SurveyAcronymn, SurveyRefNo, SurveyIndex, YearStart, YearEnd, Quarter)
-  
-  srvy.list <- unique(srvys$SurveyAcronymn)
-  message(paste0(srvy.list, collapse = ", "))  
-  
-  for(srvy in srvy.list){
+
+  for (srvy in 1:length(srvy.list)) {
     
+    srv <- srvy.list[srvy]
+    message(srv)
     # Load survey data 
-    files <- list.files(paste0(load.path, "SurveyData/", stk, "/raw/"), pattern = paste0("*", srvy, "*"))
-    file.paths <- paste0(load.path, "SurveyData/", stk, "/raw/", files)
-    
-    load(file.paths[stringr::str_detect(file.paths, ".HH--")])
-    load(file.paths[stringr::str_detect(file.paths, ".HL--")])
-    load(file.paths[stringr::str_detect(file.paths, ".CA--")])
+    files <- list.files(paste0(load.path, "SurveyData/", stk, "/raw/"), pattern = paste0("*", srv, "*"), full.names = TRUE)
+
+    load(files[str_detect(files, ".HH--")])
+    load(files[str_detect(files, ".HL--")])
+    load(files[str_detect(files, ".CA--")])
     
     # Remove duplicates
     hh <- unique(hh)
@@ -103,11 +65,12 @@ for(i in 1:length(stks)){
     
     # Add ICES Divisions
     area_div <- dplyr::distinct(ices_rect[c("ICESNAME", "Area_27", "Shape_Area")])
-    hh <- merge.data.frame(hh, area_div, by.x = "StatRec", by.y = "ICESNAME")
-    ca <- merge.data.frame(ca, area_div, by.x = "AreaCode", by.y = "ICESNAME")
+    hh <- merge.data.frame(hh, area_div, by.x = "StatRec", by.y = "ICESNAME", all.x = TRUE)
+    ca <- merge.data.frame(ca, area_div, by.x = "AreaCode", by.y = "ICESNAME", all.x = TRUE)
     
     # Edit -9 NA placeholder
     hl$TotalNo[hl$TotalNo == -9] <- NA
+    hl$HLNoAtLngt[hl$HLNoAtLngt == -9] <- NA
     
     # Remove invalid hauls
     hh <- filter(hh, !HaulVal %in% c("I", "P")) # p = partly valid, it is deprecated 
@@ -138,10 +101,9 @@ for(i in 1:length(stks)){
     
     any(hlhh$`SumHlNoAtLngt - TotalNo` != 0)
     
-    
-    save(hh, file = paste0(save.path, stk, "/clean/", namefile(stk, hh)))
-    save(hl, file = paste0(save.path, stk, "/clean/", namefile(stk, hl)))
-    save(ca, file = paste0(save.path, stk, "/clean/", namefile(stk, ca)))
+    save(hh,   file = paste0(save.path, stk, "/clean/", namefile(stk, hh)))
+    save(hl,   file = paste0(save.path, stk, "/clean/", namefile(stk, hl)))
+    save(ca,   file = paste0(save.path, stk, "/clean/", namefile(stk, ca)))
     save(hlhh, file = paste0(save.path, stk, "/clean/", namefile(stk, hlhh, r = "HLHH")))
   
   }
