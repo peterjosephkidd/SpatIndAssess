@@ -45,7 +45,7 @@
 
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
-spi <- function(hlhh, yrs, qrs, species_aphia, stk_divs){
+spi <- function(hlhh, yrs, qrs, species_aphia, stk_divs, matures = FALSE){
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>SPI>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
 #> This function calculate SPI based on the observed catches. The are argument
 #> can be used to weight areas in circumstances of unequal sized areas
@@ -58,6 +58,7 @@ spi <- function(hlhh, yrs, qrs, species_aphia, stk_divs){
   qrs <- as.numeric(qrs)
   # Filter data
   s1 <- hlhh %>%
+    ungroup() %>%
     filter(Area_27 %in% stk_divs, 
            Year %in% c(yrs),
            Quarter %in% c(qrs),
@@ -75,21 +76,33 @@ spi <- function(hlhh, yrs, qrs, species_aphia, stk_divs){
 ", "No data for years ", paste(c(setdiff(yrs, unique(s1$Year)), setdiff(unique(s1$Year), yrs)), collapse = ", "), " in ", unique(hlhh$Survey), " survey data (quarters ", paste(sort(unique(s1$Quarter)), collapse = ", "), "), region(s) ", paste0(stk_divs, collapse = ", "), ".\n"), immediate. = TRUE)
   }
   
+  qr <- paste(sort(unique(s1$Quarter)), collapse = ", ")
+  
   # All rectangles sampled each year and the total duration of hauls within them for ALL species
   rectsamp <- s1 %>% 
     select(Year,StatRec,HaulDur) %>%
     group_by(Year, StatRec) %>%
-    summarise(TotalHaulDur = sum(HaulDur))
+    summarise(TotalHaulDur = sum(HaulDur), .groups = "keep")
   
   # Fo: observed frequency -- catches in each positive rectangle/area
   observed2 <- s1 %>% 
-    filter(Valid_Aphia == species_aphia) %>%
-    select(haul.id, Valid_Aphia, Year, Quarter, StatRec, Area_27, TotalNo, HaulVal, HaulDur) %>%
-    distinct() %>%
-    group_by(Year, StatRec) %>%
-    summarise(Fo = sum(TotalNo),
-              TotSpcsHaulDur = sum(HaulDur),
-              Fo.Dur = Fo/TotSpcsHaulDur)
+    {if (matures == TRUE)
+      filter(., Valid_Aphia == species_aphia, 
+             TrgtSpcsMature == 1) %>%
+      select(haul.id, Valid_Aphia, Year, Quarter, StatRec, Area_27, TotalNoMature, HaulVal, HaulDur) %>%
+      distinct() %>%
+      group_by(Year, StatRec) %>%
+      summarise(Fo = sum(TotalNoMature),
+                TotSpcsHaulDur = sum(HaulDur),
+                Fo.Dur = Fo/TotSpcsHaulDur, .groups = "keep")
+    else
+      filter(., Valid_Aphia == species_aphia) %>%
+      select(haul.id, Valid_Aphia, Year, Quarter, StatRec, Area_27, TotalNo, HaulVal, HaulDur) %>%
+      distinct() %>%
+      group_by(Year, StatRec) %>%
+      summarise(Fo = sum(TotalNo),
+                TotSpcsHaulDur = sum(HaulDur),
+                Fo.Dur = Fo/TotSpcsHaulDur, .groups = "keep")}
   
   # Merge and divide the total number of catches by total duration hauled in each rectangle
   observed <- left_join(rectsamp, observed2, by = c("Year", "StatRec")) # left_join keeps the rectangles where there were no species observations as NAs
@@ -146,7 +159,7 @@ spi <- function(hlhh, yrs, qrs, species_aphia, stk_divs){
            SPI.dur = 1-sumFoFe.dur/Denom.dur) %>%
     select(Year, SPI, SPI.dur) %>%
     distinct() %>%
-    mutate(Quarter = paste(sort(unique(s1$Quarter)), collapse = ", ")) %>%
+    mutate(Quarter = qr) %>%
     relocate(Year, Quarter)
   
   return(spi3)
@@ -170,6 +183,7 @@ pa_rect <- function(hlhh, yrs, qrs, species_aphia, stk_divs, matures = FALSE){
   qrs <- as.numeric(qrs)
   ### Filter data
   n.rects2 <- hlhh %>%
+    ungroup() %>%
     filter(Area_27 %in% stk_divs, 
            Year %in% c(yrs),
            Quarter %in% c(qrs),
@@ -179,33 +193,47 @@ pa_rect <- function(hlhh, yrs, qrs, species_aphia, stk_divs, matures = FALSE){
   if(!identical(as.numeric(unique(n.rects2$Quarter)), qrs)){
     warning(paste0("Data not found in all survey quarters provided. 
 ", "Only data for quarters ", paste(sort(unique(n.rects2$Quarter)), collapse = ", ")), " available in ", unique(hlhh$Survey), " survey data (years ", min(yrs), ":", max(yrs), "), region(s) ", paste0(stk_divs, collapse = ", "), ".
-", "No data for quarter ", paste(c(setdiff(qrs, unique(n.rects2$Quarter)), setdiff(unique(n.rects2$Quarter), qrs)), collapse = ", "), "\n")
+", "No data for quarter ", paste(c(setdiff(qrs, unique(n.rects2$Quarter)), setdiff(unique(n.rects2$Quarter), qrs)), collapse = ", "), "\n", immediate. = TRUE)
   }
   if(!identical(as.numeric(sort(unique(n.rects2$Year))), yrs)){
     warning(paste0("Species not found in all survey years provided. 
-", "No data for years ", paste(c(setdiff(yrs, unique(n.rects2$Year)), setdiff(unique(n.rects2$Year), yrs)), collapse = ", "), " in ", unique(hlhh$Survey), " survey data (quarters ", paste(sort(unique(n.rects2$Quarter)), collapse = ", "), "), region(s) ", paste0(stk_divs, collapse = ", "), ".\n"))
+", "No data for years ", paste(c(setdiff(yrs, unique(n.rects2$Year)), setdiff(unique(n.rects2$Year), yrs)), collapse = ", "), " in ", unique(hlhh$Survey), " survey data (quarters ", paste(sort(unique(n.rects2$Quarter)), collapse = ", "), "), region(s) ", paste0(stk_divs, collapse = ", "), ".\n"), immediate. = TRUE)
   }
+  
+  qr <- paste(sort(unique(n.rects2$Quarter)), collapse = ", ")
   
   ### How many rectangles sampled per year?
   n.rects <- n.rects2 %>%
     group_by(Year) %>%
     summarise(nrects = length(unique(StatRec))) %>%
-    mutate(Quarter = paste(sort(unique(n.rects2$Quarter)), collapse = ", "))
+    mutate(Quarter = qr) %>%
+    relocate(Year, Quarter)
   
   ### How many rectangles sampled per year where species were present?
   p.rects <- n.rects2 %>%
-    {if (matures == TRUE) filter(., Valid_Aphia == species_aphia, TrgtSpcsMature == 1) 
-      else filter(., Valid_Aphia == species_aphia)} %>%
+    {if (matures == TRUE) 
+      filter(., Valid_Aphia == species_aphia, TrgtSpcsMature == 1) 
+     else 
+      filter(., Valid_Aphia == species_aphia)} %>%
     group_by(Year) %>%
     filter() %>%
     summarise(nrects_p = length(unique(StatRec))) %>%
-    mutate(Quarter = paste(sort(unique(n.rects2$Quarter)), collapse = ", "))
+    mutate(Quarter = qr) %>%
+    relocate(Year, Quarter)
   
   ### Merge but keep years where no species were found
   np.rects <- left_join(n.rects, p.rects, by = c("Year", "Quarter"))
   np.rects$nrects_p[is.na(np.rects$nrects_p)] <- 0 # change NA to 0 
   np.rects$Year <- as.numeric(as.character(np.rects$Year))
   np.rects$PosAreaR <- np.rects$nrects_p/np.rects$nrects
+  # Add missing years
+  yrmiss <- yrs[!yrs %in% unique(np.rects$Year)]
+  np.rects <- np.rects %>%
+    rows_insert(data.frame("Year" = yrmiss,
+             "Quarter"  = rep(qr, length(yrmiss)),
+             "nrects"   = rep(NA, length(yrmiss)),
+             "nrects_p" = rep(NA, length(yrmiss)),
+             "PosAreaR" = rep(NA, length(yrmiss))), by = c("Year", "Quarter")) 
   
   ### Return
   return(np.rects)
@@ -225,6 +253,7 @@ pa_haul <- function(hlhh, yrs, qrs, species_aphia, stk_divs, matures = FALSE){
   qrs <- as.numeric(qrs)
   ### Filter data
   n.hauls2 <- hlhh %>% 
+    ungroup() %>%
     filter(Area_27 %in% stk_divs,
            Year %in% c(yrs),
            Quarter %in% c(qrs),
@@ -241,26 +270,39 @@ pa_haul <- function(hlhh, yrs, qrs, species_aphia, stk_divs, matures = FALSE){
 ", "No data for years ", paste(c(setdiff(yrs, unique(n.hauls2$Year)), setdiff(unique(n.hauls2$Year), yrs)), collapse = ", "), " in ", unique(hlhh$Survey), " survey data (quarters ", paste(sort(unique(n.hauls2$Quarter)), collapse = ", "), "), region(s) ", paste0(stk_divs, collapse = ", "), ".\n"), immediate. = TRUE)
   }
   
+  qr <- paste(sort(unique(n.hauls2$Quarter)), collapse = ", ")
+  
   ### How many hauls in each year?
   n.hauls <- n.hauls2 %>%
     group_by(Year) %>%
     summarise(no_haul.ids = length(unique(haul.id))) %>%
-    mutate(Quarter = paste(sort(unique(n.hauls2$Quarter)), collapse = ", "))
+    mutate(Quarter = qr) %>%
+    relocate(Year, Quarter)
   
   ### How many hauls in each year where species were present?
   p.hauls <- n.hauls2 %>% 
-    {if (matures == TRUE) filter(., Valid_Aphia == species_aphia, TrgtSpcsMature == 1) 
-      else filter(., Valid_Aphia == species_aphia)} %>%
+    {if (matures == TRUE) 
+      filter(., Valid_Aphia == species_aphia, TrgtSpcsMature == 1) 
+     else 
+      filter(., Valid_Aphia == species_aphia)} %>%
     group_by(Year) %>%
     summarise(pr_hauls = length(unique(haul.id))) %>%
-    mutate(Quarter = paste(sort(unique(n.hauls2$Quarter)), collapse = ", "))
+    mutate(Quarter = qr) %>%
+    relocate(Year, Quarter)
   
   ### Merge but keep years where no species were found
   np.hauls <- left_join(n.hauls, p.hauls, by = c("Year", "Quarter"))
   np.hauls$pr_hauls[is.na(np.hauls$pr_hauls)] <- 0 # change NA to 0 
   np.hauls$Year <- as.numeric(as.character(np.hauls$Year))
   np.hauls$PosAreaH <- np.hauls$pr_hauls/np.hauls$no_haul.ids
-  
+  # Add missing years
+  yrmiss <- yrs[!yrs %in% unique(np.hauls$Year)]
+  np.hauls <- np.hauls %>%
+    rows_insert(data.frame("Year"        = yrmiss,
+                           "Quarter"     = rep(qr, length(yrmiss)),
+                           "no_haul.ids" = rep(NA, length(yrmiss)),
+                           "pr_hauls"    = rep(NA, length(yrmiss)),
+                           "PosAreaH"    = rep(NA, length(yrmiss))), by = c("Year", "Quarter")) 
   ### return
   return(np.hauls)
 }
@@ -277,10 +319,12 @@ lorenz_data <- function(hlhh, yrs, qrs, species_aphia, stk_divs, matures = FALSE
   qrs <- as.numeric(qrs)
   ### Get all hauls sampled in the given years, quarters, and stock divisions
   allspcs_lor2 <- hlhh %>%
+    ungroup() %>%
     filter(Area_27 %in% stk_divs,
            Year %in% c(yrs),
            Quarter %in% c(qrs),
            HaulVal != "I") # remove invalid hauls
+  
   # Checks
   if(!identical(as.numeric(unique(allspcs_lor2$Quarter)), qrs)){
     warning(paste0("Data not found in all survey quarters provided. 
@@ -289,9 +333,8 @@ lorenz_data <- function(hlhh, yrs, qrs, species_aphia, stk_divs, matures = FALSE
   }
   if(!identical(as.numeric(sort(unique(allspcs_lor2$Year))), yrs)){
     warning(paste0("Species not found in all survey years provided. 
-", "No data for years ", paste(c(setdiff(yrs, unique(allspcs_lor2$Year)), setdiff(unique(allspcs_lor2$Year), yrs)), ", "), "in ", unique(hlhh$Survey), " survey data (quarters ", paste(sort(unique(allspcs_lor2$Quarter)), collapse = ", "), "), region(s) ", paste0(stk_divs, collapse = ", "), ".\n"), immediate. = TRUE)
+", "No data for years ", paste(c(setdiff(yrs, unique(allspcs_lor2$Year)), setdiff(unique(allspcs_lor2$Year), yrs)), collapse = ", "), " in ", unique(hlhh$Survey), " survey data (quarters ", paste(sort(unique(allspcs_lor2$Quarter)), collapse = ", "), "), region(s) ", paste0(stk_divs, collapse = ", "), ".\n"), immediate. = TRUE)
   }
-  
   allspcs_lor <- allspcs_lor2 %>%
     ungroup() %>%
     select(haul.id, Year, Quarter, StatRec, HaulDur) %>%
@@ -299,9 +342,15 @@ lorenz_data <- function(hlhh, yrs, qrs, species_aphia, stk_divs, matures = FALSE
     na.omit() %>%
     # Create some artificial variables. We want to include all hauls conducted, 
     # not just the ones where target species were found
-    mutate(TotalNo = as.numeric(0), # add 0 TotalNo 
-           Valid_Aphia = species_aphia) %>% # add species aphia to all data
-    select(haul.id, Valid_Aphia, Year, Quarter, StatRec, TotalNo, HaulDur) # rearrange cols
+    {if (matures == TRUE) 
+      mutate(., TotalNoMature = as.numeric(0),
+             Valid_Aphia = species_aphia) %>%
+      select(haul.id, Valid_Aphia, Year, Quarter, StatRec, TotalNoMature, HaulDur)  
+     else 
+      mutate(., TotalNo = as.numeric(0), # add 0 TotalNo 
+             Valid_Aphia = species_aphia) %>% # add species aphia to all data
+      select(haul.id, Valid_Aphia, Year, Quarter, StatRec, TotalNo, HaulDur)} # rearrange cols
+  
   # Checks
   if(all(unique(allspcs_lor$Year), unique(hlhh$Year)) == FALSE){
     warning("Not all survey years were retained in `allspcs_lor`\n", immediate. = TRUE)
@@ -320,17 +369,26 @@ lorenz_data <- function(hlhh, yrs, qrs, species_aphia, stk_divs, matures = FALSE
 
   # Restrict dataset to what we need   
   spcs_lor <- spcs_lor2 %>%
-    select(haul.id, Valid_Aphia, Year, Quarter, StatRec, TotalNo, HaulDur) %>%
-    distinct() %>%
-    na.omit() %>%
-    mutate(TotalNo = as.numeric(TotalNo)) %>% #, 
-           #Quarter = paste(sort(unique(spcs_lor2$Quarter)), collapse = ", ")) %>%
-    relocate(haul.id, Valid_Aphia, Year, Quarter, StatRec, TotalNo, HaulDur)
+    {if (matures == TRUE)
+      select(., haul.id, Valid_Aphia, Year, Quarter, StatRec, TotalNoMature, HaulDur) %>%
+      distinct() %>%
+      na.omit() %>%
+      mutate(TotalNoMature = as.numeric(TotalNoMature)) %>% #, 
+      #Quarter = paste(sort(unique(spcs_lor2$Quarter)), collapse = ", ")) %>%
+      relocate(haul.id, Valid_Aphia, Year, Quarter, StatRec, TotalNoMature, HaulDur)
+     else  
+      select(., haul.id, Valid_Aphia, Year, Quarter, StatRec, TotalNo, HaulDur) %>%
+      distinct() %>%
+      na.omit() %>%
+      mutate(TotalNo = as.numeric(TotalNo)) %>% #, 
+             #Quarter = paste(sort(unique(spcs_lor2$Quarter)), collapse = ", ")) %>%
+      relocate(haul.id, Valid_Aphia, Year, Quarter, StatRec, TotalNo, HaulDur)}
 
   
   if(janitor::compare_df_cols_same(allspcs_lor, spcs_lor)==FALSE){
     warning("Columns in `allspcs_lor` and `spcs_lor` do not match.\n", immediate. = TRUE)
   }
+  
   # Join the zero dataset to the presence dataset, but only the combinations of
   # haul.id, year, quarter, and statrec that are not already in the present dataset
   # essentially, this creates a full dataframe of all survey hauls, both where 
@@ -346,13 +404,23 @@ lorenz_data <- function(hlhh, yrs, qrs, species_aphia, stk_divs, matures = FALSE
     #select(-Quarter, -haul.id) %>%
     distinct() %>%
     arrange(Year) %>%
-    mutate(TotalNo_Dur = TotalNo/HaulDur) %>% # standardise by haul duration
-    arrange(Year, TotalNo_Dur) %>% # order ascending
-    group_by(Year) %>%
-    mutate(CumSum = cumsum(TotalNo_Dur),
-           rect_num = row_number(),
-           cumsum_prop = CumSum/max(CumSum),
-           rect_num_prop = row_number()/max(row_number()))
+    {if (matures == TRUE)
+      mutate(., TotalNoMature_Dur = TotalNoMature/HaulDur) %>%
+      arrange(Year, TotalNoMature_Dur) %>%
+      group_by(Year) %>%
+      mutate(CumSum = cumsum(TotalNoMature_Dur),
+             rect_num = row_number(),
+             cumsum_prop = CumSum/max(CumSum),
+             rect_num_prop = row_number()/max(row_number()))
+    else
+      mutate(., TotalNo_Dur = TotalNo/HaulDur) %>% # standardise by haul duration
+      arrange(Year, TotalNo_Dur) %>% # order ascending
+      group_by(Year) %>%
+      mutate(CumSum = cumsum(TotalNo_Dur),
+             rect_num = row_number(),
+             cumsum_prop = CumSum/max(CumSum),
+             rect_num_prop = row_number()/max(row_number()))}
+      
   lorenz$Year <- as.numeric(as.character(lorenz$Year))
   
   if(suppressWarnings(all(unique(lorenz$Year), unique(hlhh$Year)) == FALSE)){
@@ -375,7 +443,7 @@ lorenz_plot <- function(lorenz_data){
   geom_hline(yintercept = 0.95, colour = "black", linewidth = 0.5) +
     
   coord_cartesian(ylim= c(0,1), xlim = c(0,1), expand = FALSE) +
-    labs(title = paste0("Lorenz Curve: Distribution of ", species, " (", min(lorenz_data$Year),":", max(lorenz_data$Year), ", Q", paste(sort(unique(lorenz_data$Quarter)), collapse = ", "), ")"), 
+    labs(title = paste0("Lorenz Curve (", min(lorenz_data$Year),":", max(lorenz_data$Year), ", Q", paste(sort(unique(lorenz_data$Quarter)), collapse = ", "), ")"), 
          subtitle = paste0(
            "Where vertical line intercepts Lorenz curve = Proportion of population observed within 95% of rectangles (D95 population).",  
          "\nWhere horizontal line intercepts Lorenz curve = Proportion of survey area occupied by 95% of the population (D95 area).",
@@ -395,7 +463,7 @@ y = "Culmuative Proportion of Catch") +
 
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
-Gini <- function(lorenz){
+Gini <- function(lorenz, matures = FALSE){
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Gini Index >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
 #> Gini Index is the area between the Lorenz curve and the linear "line of 
 #> equality". Typically a high score means that there is high inequality. In 
@@ -403,11 +471,18 @@ Gini <- function(lorenz){
 #> of the total catch. On the other hand, low values indicate that the total 
 #> catch is spread across ICES rectangles equally. 
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+    qr <- paste(sort(unique(lorenz$Quarter)), collapse = ", ")
+  
     G <- lorenz %>%
+      ungroup() %>%
       group_by(Year) %>%
-      summarise('Gini Index' = ineq::ineq(TotalNo_Dur, type = "Gini")) %>%
-      mutate(Quarter = paste(sort(unique(lorenz$Quarter)), collapse = ", ")) %>%
+      {if (matures == TRUE)
+        summarise(., 'Gini Index' = ineq::ineq(TotalNoMature_Dur, type = "Gini"))
+       else
+        summarise(., 'Gini Index' = ineq::ineq(TotalNo_Dur, type = "Gini"))} %>%
+      mutate(Quarter = qr) %>%
       relocate(Year, Quarter)
+        
     G$'Gini Index' <- 1- G$'Gini Index' # take inverse, higher = more distributed
     #G$'Gini Index'[is.nan(G$'Gini Index')] <- 0 # change NaNs to 0
     G$Year <- as.numeric(as.character(G$Year))
@@ -429,9 +504,15 @@ d95 <- function(lorenz, level = 0.95, type = "population"){
     stop("Argument 'level' must be between 0 and 1. Default = 0.95.")
   }
   
+  qr <- paste(sort(unique(lorenz$Quarter)), collapse = ", ")
+  
   D95_d <- data.frame()
+  
   for(yr in unique(lorenz$Year)){
-    g <- filter(lorenz, Year == yr)
+    g <- lorenz %>%       
+      ungroup() %>%
+      filter(Year == yr)
+    
     # Get the point where the vertical line from the xaxis at 0.95
     # intersects the Lorenz curve
     if(any(is.na(g$cumsum_prop))){
@@ -448,22 +529,24 @@ d95 <- function(lorenz, level = 0.95, type = "population"){
     D95_d <- rbind(D95_d, output)
     
   }
+  
   D95_d <- D95_d %>% 
     rename("Year" = yr) %>%
-    mutate(Quarter = paste(sort(unique(lorenz$Quarter)), collapse = ", ")) %>%
+    mutate(Quarter = qr) %>%
     relocate(Year, Quarter, D95)
-  if(type == "population"){
-    writeLines(paste0("D95 is an estimate of the proportion of the population that exists in ", level*100, "% of surveyed rectangles."))
-  }
-  if(type == "area"){
-    writeLines(paste0("D95 is an estimate, as a proportion, of the surveyed area that ", level*100, "% of the population occupy."))
-  }
+  
+  #if(type == "population"){
+  #  writeLines(paste0("D95 is an estimate of the proportion of the population that exists in ", level*100, "% of surveyed rectangles."))
+  #}
+  #if(type == "area"){
+  #  writeLines(paste0("D95 is an estimate, as a proportion, of the surveyed area that ", level*100, "% of the population occupy."))
+  #}
   return(D95_d)
 }
 
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
-spreadingarea_data <- function(hlhh, yrs, qrs, species_aphia, stk_divs){
+spreadingarea_data <- function(hlhh, yrs, qrs, species_aphia, stk_divs, matures = FALSE){
 #>>>>>>>>>>>>>>>>>>>>>>>>> Spreading Area Data Prep >>>>>>>>>>>>>>>>>>>>>>>>>>>#
 #> Function to get the total number of catches divided by the haul duration
 #> for each haul
@@ -471,10 +554,11 @@ spreadingarea_data <- function(hlhh, yrs, qrs, species_aphia, stk_divs){
   yrs <- as.numeric(yrs)
   qrs <- as.numeric(qrs)
   sa2 <- hlhh %>%
-      filter(Area_27 %in% stk_divs,
-             Year %in% c(yrs),
-             Quarter %in% c(qrs),
-             HaulVal != "I") # remove invalid hauls
+        ungroup %>%
+        filter(Area_27 %in% stk_divs,
+               Year %in% c(yrs),
+               Quarter %in% c(qrs),
+               HaulVal != "I") # remove invalid hauls
   
   # Check what data is available
   if(!identical(as.numeric(unique(sa2$Quarter)), qrs)){
@@ -487,32 +571,34 @@ spreadingarea_data <- function(hlhh, yrs, qrs, species_aphia, stk_divs){
 ", "No data for years ", paste(c(setdiff(yrs, unique(sa2$Year)), setdiff(unique(sa2$Year), yrs)), collapse = ", "), " in ", unique(hlhh$Survey), " survey data (quarters ", paste(sort(unique(sa2$Quarter)), collapse = ", "), "), region(s) ", paste0(stk_divs, collapse = ", "), ".\n"), immediate. = TRUE)
   }
   
+  qr <- paste(sort(unique(sa2$Quarter)), collapse = ", ")
+  
   sa <- sa2 %>%
-      select(haul.id, Valid_Aphia, Year, StatRec, TotalNo, HaulDur) %>%
-      mutate(TotalNo = as.numeric(TotalNo), 
-             Quarter = paste(sort(unique(sa2$Quarter)), collapse = ", ")) %>%
-      filter(Valid_Aphia == species_aphia) %>%
-      relocate(haul.id, Valid_Aphia, Year, Quarter, StatRec, TotalNo, HaulDur) %>%
+    {if (matures == TRUE)
+      select(., haul.id, Valid_Aphia, Year, StatRec, TrgtSpcsMature, TotalNoMature, HaulDur) %>%
+      mutate(TotalNoMature = as.numeric(TotalNoMature)) %>%
+      filter(Valid_Aphia == species_aphia, TrgtSpcsMature == 1) %>%
+      relocate(haul.id, Valid_Aphia, Year, StatRec, TotalNoMature, HaulDur) %>%
       distinct() %>%
       na.omit() %>%
-      mutate(TotalNo_Dur = TotalNo/HaulDur) %>% #standardise by haul duration
-      arrange(Year, desc(TotalNo_Dur))
+      mutate(TotalNoMature_Dur = TotalNoMature/HaulDur,
+             Quarter = qr) %>% #standardise by haul duration
+      arrange(Year, desc(TotalNoMature_Dur)) %>%
+      relocate(Year, Quarter)
+     else
+      select(., haul.id, Valid_Aphia, Year, StatRec, TotalNo, HaulDur) %>%
+      mutate(TotalNo = as.numeric(TotalNo)) %>%
+      filter(Valid_Aphia == species_aphia) %>%
+      relocate(haul.id, Valid_Aphia, Year, StatRec, TotalNo, HaulDur) %>%
+      distinct() %>%
+      na.omit() %>%
+      mutate(TotalNo_Dur = TotalNo/HaulDur,
+             Quarter = qr) %>% #standardise by haul duration
+      arrange(Year, desc(TotalNo_Dur)) %>%
+      relocate(Year, Quarter)}
+  
   return(sa)
 }
-    
-# old code ---  
-#  sa <- sa2 %>%
-#    arrange(Year) %>%
-#    mutate(TotalNo_Dur = TotalNo/HaulDur) %>% # standardise by haul duration
-#    arrange(Year, desc(TotalNo_Dur)) %>% # order asce
-#    group_by(Year) %>%
-#    mutate("Q(T)" = cumsum(TotalNo_Dur),
-#           "T" = row_number(),
-#           "Tprop" = row_number()/max(row_number()),
-#           "Q" = sum(TotalNo_Dur),
-#           "(Q-Q(T)/Q" = (Q-`Q(T)`)/Q,
-#           "n" = length(Q))
-# old code ---  
 
 
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
@@ -620,6 +706,7 @@ chullarea <- function(hlhh, yrs, qrs, species_aphia, stk_divs, matures = FALSE){
   yrs <- as.numeric(yrs)
   qrs <- as.numeric(qrs)
   chull_data2 <- hlhh %>%
+    ungroup() %>%
     filter(Area_27 %in% stk_divs,
            Year %in% c(yrs),
            Quarter %in% c(qrs),
@@ -635,6 +722,8 @@ chullarea <- function(hlhh, yrs, qrs, species_aphia, stk_divs, matures = FALSE){
     warning(paste0("Species not found in all survey years provided. 
 ", "No data for years ", paste(c(setdiff(yrs, unique(chull_data2$Year)), setdiff(unique(chull_data2$Year), yrs)), collapse = ", "), " in ", unique(hlhh$Survey), " survey data (quarters ", paste(sort(unique(chull_data2$Quarter)), collapse = ", "), "), region(s) ", paste0(stk_divs, collapse = ", "), ".\n"), immediate. = TRUE)
   }
+  
+  qr <- paste(sort(unique(chull_data2$Quarter)), collapse = ", ")
   
   chull_data <- chull_data2 %>%
     {if (matures == TRUE) 
@@ -660,11 +749,14 @@ chullarea <- function(hlhh, yrs, qrs, species_aphia, stk_divs, matures = FALSE){
     latitude <- chull_yearly$ShootLat
     
     # Combine latitude and longitude into a matrix
-    coordinates <- cbind(longitude, latitude)
+    coordinates <- unique(cbind(longitude, latitude))
     # Geometries - closed shapes must have at least 4 rows
-    if(nrow(coordinates) <= 4){
+    if(nrow(chull_data2[chull_data2$Year == yr,]) > 0 & nrow(coordinates) <= 4){
       convex_hull_area <- 0
       areaoccupied <- 0
+    } else if(nrow(chull_data2[chull_data2$Year == yr,]) == 0){
+      convex_hull_area <- NA
+      areaoccupied <- NA
     } else{
       # Calculate the convex hull
       convex_hull <- chull(coordinates)
@@ -689,7 +781,7 @@ chullarea <- function(hlhh, yrs, qrs, species_aphia, stk_divs, matures = FALSE){
   }
 
   chull <- chull %>% 
-    mutate(Quarter = paste(sort(unique(chull_data2$Quarter)), collapse = ", ")) %>%
+    mutate(Quarter = qr) %>%
     relocate(yr, Quarter) %>%
     rename("Year" = yr)
   return(chull)
@@ -707,60 +799,62 @@ ellarea <- function(hlhh, yrs, qrs, species_aphia, stk_divs, matures = FALSE){
   
   yrs <- as.numeric(yrs)
   qrs <- as.numeric(qrs)
-  d2 <- hlhh %>%
+  
+  ell_data2 <- hlhh %>%
+    ungroup() %>%
+    filter(Area_27 %in% stk_divs,
+           Year %in% c(yrs),
+           Quarter %in% c(qrs),
+           HaulVal != "I")
+  
+  ell_data <- ell_data2 %>%
+    ungroup() %>%
     {if (matures == TRUE) 
-      filter(., Area_27 %in% c(stk_divs),
-             
-             Year %in% c(yrs),
-             Quarter %in% c(qrs),
-             HaulVal != "I", 
-             Valid_Aphia == species_aphia, 
+      filter(., Valid_Aphia == species_aphia, 
              TrgtSpcsMature == 1) 
       else
-       filter(.,Area_27 %in% c(stk_divs),
-              Year %in% c(yrs),
-              Quarter %in% c(qrs),
-              HaulVal != "I", 
-              Valid_Aphia == species_aphia)} %>%
+       filter(., Valid_Aphia == species_aphia)} %>%
     distinct()
 
   # Check what data is available
-  if(!identical(as.numeric(unique(d2$Quarter)), qrs)){
+  if(!identical(as.numeric(unique(ell_data$Quarter)), qrs)){
     warning(paste0("Data not found in all survey quarters provided. 
-    ", "Only data for quarters ", paste(sort(unique(d2$Quarter)), collapse = ", ")), " available in ", unique(hlhh$Survey), " survey data (years ", min(yrs), ":", max(yrs), "), region(s) ", paste0(c(stk_divs), collapse = ", "), ".
-    ", "No data for quarter ", paste(c(setdiff(qrs, unique(d2$Quarter)), setdiff(unique(d2$Quarter), qrs)), collapse = ", "), "\n", immediate. = TRUE)
+    ", "Only data for quarters ", paste(sort(unique(ell_data$Quarter)), collapse = ", ")), " available in ", unique(hlhh$Survey), " survey data (years ", min(yrs), ":", max(yrs), "), region(s) ", paste0(c(stk_divs), collapse = ", "), ".
+    ", "No data for quarter ", paste(c(setdiff(qrs, unique(ell_data$Quarter)), setdiff(unique(ell_data$Quarter), qrs)), collapse = ", "), "\n", immediate. = TRUE)
   }
-  if(!identical(as.numeric(sort(unique(d2$Year))), yrs)){
+  if(!identical(as.numeric(sort(unique(ell_data$Year))), yrs)){
     warning(paste0("Species not found in all survey years provided. 
-    ", "No data for years ", paste(c(setdiff(yrs, unique(d2$Year)), setdiff(unique(d2$Year), yrs)), collapse = ", "), " in ", unique(hlhh$Survey), " survey data (quarters ", paste(sort(unique(d2$Quarter)), collapse = ", "), "), region(s) ", paste0(c(stk_divs), collapse = ", "), ".\n"), immediate. = TRUE)
+    ", "No data for years ", paste(c(setdiff(yrs, unique(ell_data$Year)), setdiff(unique(ell_data$Year), yrs)), collapse = ", "), " in ", unique(hlhh$Survey), " survey data (quarters ", paste(sort(unique(ell_data$Quarter)), collapse = ", "), "), region(s) ", paste0(c(stk_divs), collapse = ", "), ".\n"), immediate. = TRUE)
   }
   
+  qr <- paste(sort(unique(ell_data$Quarter)), collapse = ", ")
+  
   df <- data.frame()
-  for(yr in yrs){
-    data <- data.frame(x = d2[d2$Year == yr,]$ShootLong, 
-                       y = d2[d2$Year == yr,]$ShootLat)
-    if(nrow(data) < 2){
+  
+  for (yr in yrs) {
+    data <- data.frame(x = ell_data[ell_data$Year == yr,]$ShootLong, 
+                       y = ell_data[ell_data$Year == yr,]$ShootLat)
+    if (nrow(ell_data2[ell_data2$Year == yr,]) == 0) {
       ela = NA
-    } else{
+    } else if (nrow(data) < 4) {
+      ela = 0
+      } else {
       p <- ggplot(data, aes(x = x, y = y)) +
         geom_point() +
         stat_ellipse(type = "t")
-      
       pb <- ggplot_build(p)
-      if(nrow(pb$data[[1]]) == 0){
-        ela <- 0
-      } else{
-        el <- pb$data[[2]][c("x", "y")]
-        ctr <- MASS::cov.trob(data)$center #updated previous answer here
-        dist2center <- sqrt(rowSums((t(t(el) - ctr))^2))
-        ela <- pi * min(dist2center) * max(dist2center)
+      el <- pb$data[[2]][c("x", "y")]
+      ctr <- MASS::cov.trob(data)$center 
+      dist2center <- sqrt(rowSums((t(t(el) - ctr))^2))
+      ela <- pi * min(dist2center) * max(dist2center)
       }
-    }
+    
     output <- cbind("Year" = yr, "Ellipse Area" = ela)
+    
     df <- rbind(df, output)
   }
   df <- df %>%
-    mutate(Quarter = paste(sort(unique(d2$Quarter)), collapse = ", ")) %>%
+    mutate(Quarter = qr) %>%
     relocate(Year, Quarter,`Ellipse Area`)
   return(df)
 }
@@ -813,13 +907,13 @@ cog <- function(x, y, z = 1, plot = FALSE, lonlat2km = FALSE, km2lonlat = FALSE)
       d$a <- d$z
     }
     print(d)
-    p <- ggplot() +
+    cog_plot <- ggplot() +
       geom_point(data = d, aes(x,y, colour = a), size = z) +
       geom_point(data = cog_xy, aes(cog_x, cog_y), colour = "blue", shape = 15, size = 2) +
       geom_text(data = cog_xy, aes(cog_x, cog_y-(cog_y*0.02), label = "CoG")) +
       paletteer::scale_colour_paletteer_c("grDevices::Geyser") +
       labs(colour = "z")
-    print(p)
+    print(cog_plot)
   }
   
   return(cog_xy)
@@ -956,6 +1050,7 @@ coginis <- function(hlhh, yrs, qrs, species_aphia, stk_divs, # data specifics
   yrs <- as.numeric(yrs)
   qrs <- as.numeric(qrs)
   d2 <- hlhh %>%
+    ungroup %>%
     filter(Area_27 %in% stk_divs,
            Year %in% c(yrs),
            Quarter %in% c(qrs),
@@ -970,6 +1065,9 @@ coginis <- function(hlhh, yrs, qrs, species_aphia, stk_divs, # data specifics
     warning(paste0("Species not found in all survey years provided. 
   ", "No data for years ", paste(c(setdiff(yrs, unique(d2$Year)), setdiff(unique(d2$Year), yrs)), collapse = ", "), " in ", unique(hlhh$Survey), " survey data (quarters ", paste(sort(unique(d2$Quarter)), collapse = ", "), "), region(s) ", paste0(stk_divs, collapse = ", "), ".\n"), immediate. = TRUE)
   }
+  
+  qr = paste(sort(unique(d2$Quarter)), collapse = ", ")
+  
   d1 <- d2 %>% 
     filter(Valid_Aphia == species_aphia) %>%
     distinct() %>%
@@ -1001,11 +1099,11 @@ coginis <- function(hlhh, yrs, qrs, species_aphia, stk_divs, # data specifics
       d <- as.data.frame(cbind(x,y,z))
     } 
     if(nrow(d) < 1){
-      cg_x <- NaN
-      cg_y <- NaN
+      cg_x <- NA
+      cg_y <- NA
       cg_xy <- as.data.frame(cbind(cg_x, cg_y))
-      Inertia <- NaN
-      Isotropy <- NaN
+      Inertia <- NA
+      Isotropy <- NA
     } else{
       # remove NAs
       d <- na.omit(d)
@@ -1015,9 +1113,9 @@ coginis <- function(hlhh, yrs, qrs, species_aphia, stk_divs, # data specifics
       cg_xy <- as.data.frame(cbind(cg_x, cg_y))
       
       if(any(is.na(cg_xy)) & inertia == TRUE){
-        Inertia <- NaN
+        Inertia <- NA
       } else if(any(is.na(cg_xy)) & iso == TRUE){
-        Isotropy = NaN
+        Isotropy = NA
       } else{
         # Inertia
         dx <- d$x - cg_x
@@ -1103,7 +1201,7 @@ coginis <- function(hlhh, yrs, qrs, species_aphia, stk_divs, # data specifics
   df <- df[,c(TRUE, rep(cog, 2), inertia, iso)]
   df <- df %>%
     rename("Year" = yr) %>%
-    mutate(Quarter = paste(sort(unique(d2$Quarter)), collapse = ", ")) %>%
+    mutate(Quarter = qr) %>%
     relocate(Year, Quarter)
   return(df)
 }
@@ -1169,103 +1267,42 @@ cogplot <- function(cog, grid = NA, areas = NA, xlim, ylim, ...){
   return(p)
 }
 
-#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
-#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
-#>>>>>>>>>>>>>>>>>>> Centre of Gravity, Inertia, Area of Ellipse
-coginert <- function(hlhh, yrs, qrs, species_aphia, stk_divs){
-  
-  yrs <- as.numeric(yrs)
-  qrs <- as.numeric(qrs)
-  cog_data2 <- hlhh %>%
-    filter(Area_27 %in% stk_divs,
-           Year %in% c(yrs),
-           Quarter %in% c(qrs),
-           HaulVal != "I")
-  # Check what data is available
-  if(!identical(as.numeric(unique(cog_data2$Quarter)), qrs)){
-    warning(paste0("Data not found in all survey quarters provided. 
-", "Only data for quarters ", paste(sort(unique(cog_data2$Quarter)), collapse = ", ")), " available in ", unique(hlhh$Survey), " survey data (years ", min(yrs), ":", max(yrs), "), region(s) ", paste0(stk_divs, collapse = ", "), ".
-", "No data for quarter ", paste(c(setdiff(qrs, unique(cog_data2$Quarter)), setdiff(unique(cog_data2$Quarter), qrs)), collapse = ", "), "\n", immediate. = TRUE)
-  }
-  if(!identical(as.numeric(sort(unique(cog_data2$Year))), yrs)){
-    warning(paste0("Species not found in all survey years provided. 
-", "No data for years ", paste(c(setdiff(yrs, unique(cog_data2$Year)), setdiff(unique(cog_data2$Year), yrs)), collapse = ", "), " in ", unique(hlhh$Survey), " survey data (quarters ", paste(sort(unique(cog_data2$Quarter)), collapse = ", "), "), region(s) ", paste0(stk_divs, collapse = ", "), ".\n"), immediate. = TRUE)
-  }
-  cog_data <- cog_data2 %>% 
-    filter(Valid_Aphia == species_aphia)
-  
-  cgi <- data.frame()
-  for(yr in yrs){
-    cog_yearly <- cog_data %>%
-      filter(Year == yr)
-    longitude <- cog_yearly$ShootLong
-    latitude <- cog_yearly$ShootLat
-    ### Centre of gravity
-    cg_x <- mean(longitude)
-    cg_y <- mean(latitude)
-    ### Inertia
-    inertia <- sum(abs(longitude) -cg_x)^2 + sum(abs(latitude)-cg_y)^2
-    ### Area of Inertia
-    # Create a 2x2 covariance matrix
-    cov_matrix <- cov(cbind(longitude, latitude))
-    if(any(is.na(cov_matrix))){
-      area_of_ellipse <- NA
-    } else{
-      # Calculate the eigenvalues and eigenvectors of the covariance matrix
-      eigen_result <- eigen(cov_matrix)
-      eigenvalues <- eigen_result$values
-      # Calculate the semi-major and semi-minor axes (2 standard deviations)
-      # The factor 5.991 represents the Chi-square likelihood for the 95% confidence of the data.
-      # https://www.visiondummy.com/2014/04/draw-error-ellipse-representing-covariance-matrix/
-      semi_major_axis <- sqrt(5.991 * eigenvalues[1]) # 5.991 corresponds to 95% confidence interval for a 2D Gaussian distribution
-      semi_minor_axis <- sqrt(5.991 * eigenvalues[2])
-      # Calculate the area of the ellipse
-      area_of_ellipse <- pi * semi_major_axis * semi_minor_axis
-    }
-    
-    ### Output
-    outputs <- data.frame(yr, cg_x, cg_y, inertia, area_of_ellipse)
-    outputs <- outputs %>%
-      relocate(yr, cg_x, cg_y, inertia) %>%
-      rename("Year"= yr)
-    cgi <- rbind(cgi, outputs)
-  }
-  cgi <- cgi %>%
-    mutate(Quarter = paste(sort(unique(cog_data2$Quarter)), collapse = ", ")) %>%
-    relocate(Year, Quarter)
-  return(cgi)
-}
 
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
-mapdis <- function(hlhh, yrs, qrs, species_aphia, stk_divs, ices_rect,  # data specifics
+mapdis <- function(hlhh, yrs, qrs, species_aphia, stk_divs, ices_rect, matures = FALSE, # data specifics
                    cog = T, inertia = T, EOO = T, ELA = T, # spatial indicators
                    density = T,                           # weight cog and inertia
                    km2lonlat = F,                                  # convert km to lonlat
                    title = "",                                     # plot title
                    xlim = NA, ylim = NA){                          # plot bounds                                   
-  #>>>>>>>>>>>>>>>>>>>>> Map Spatial Distribution Indicators >>>>>>>>>>>>>>>>>>>>#
-  #> Function for visualising surveys points where species were found, convex     
-  #> hull area, centre of gravity, inertia ellipse with world map. Filter hlhh    
-  #> before providing it to the function
-  #> 
-  #> Pending...: update to toggle cog, inertia, chull, and ellipse95 on plot
-  #> Pending...: plot stock division boundaries 
-  #> Pending...: add spatind values on plot 
-  #> Pending...: add CPUE units into density      
-  #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+#>>>>>>>>>>>>>>>>>>>>> Map Spatial Distribution Indicators >>>>>>>>>>>>>>>>>>>>#
+#> Function for visualising surveys points where species were found, convex     
+#> hull area, centre of gravity, inertia ellipse with world map. Filter hlhh    
+#> before providing it to the function
+#> 
+#> Pending...: update to toggle cog, inertia, chull, and ellipse95 on plot
+#> Pending...: plot stock division boundaries 
+#> Pending...: add spatind values on plot 
+#> Pending...: add CPUE units into density      
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
   
   yrs <- as.numeric(yrs)
   qrs <- as.numeric(qrs)
   
   d2 <- hlhh %>%
+    ungroup() %>%
     filter(Area_27 %in% stk_divs,
            Year %in% c(yrs),
            Quarter %in% c(qrs),
            HaulVal != "I") %>%
-    # Remove length data to preven duplication when summing TotalNo
-    select(haul.id, Year, Quarter, HaulNo, StNo, Gear, Ship, Survey, TotalNo, 
-           Valid_Aphia, HaulDur, StatRec, Area_27, ShootLong, ShootLat, HaulVal, Depth) %>%
+    # Remove length data to prevent duplication when summing TotalNo
+    {if (matures == TRUE)
+      select(., haul.id, Year, Quarter, HaulNo, StNo, Gear, Ship, Survey, TrgtSpcsMature, TotalNoMature, 
+             Valid_Aphia, HaulDur, StatRec, Area_27, ShootLong, ShootLat, HaulVal, Depth)
+     else
+      select(., haul.id, Year, Quarter, HaulNo, StNo, Gear, Ship, Survey, TotalNo, 
+             Valid_Aphia, HaulDur, StatRec, Area_27, ShootLong, ShootLat, HaulVal, Depth)} %>%
     distinct() %>%
     mutate(colour = if_else(Valid_Aphia == species_aphia, 3, NA))
   
@@ -1285,9 +1322,15 @@ mapdis <- function(hlhh, yrs, qrs, species_aphia, stk_divs, ices_rect,  # data s
   
   # Filter to target species
   d1 <- d2 %>% 
-    filter(Valid_Aphia == species_aphia) %>%
-    distinct() %>%
-    mutate(TotalNo_Dur = TotalNo/HaulDur)
+    {if (matures == TRUE)
+      filter(., Valid_Aphia == species_aphia,
+             TrgtSpcsMature == 1) %>%
+      distinct() %>%
+      mutate(TotalNoMature_Dur = TotalNoMature/HaulDur)
+     else
+      filter(., Valid_Aphia == species_aphia) %>%
+      distinct() %>%
+      mutate(TotalNo_Dur = TotalNo/HaulDur)}
   
   # World Map 
   world <- map_data("world")
@@ -1315,13 +1358,13 @@ mapdis <- function(hlhh, yrs, qrs, species_aphia, stk_divs, ices_rect,  # data s
       filter(Year == yr) %>% 
       select(ShootLong, ShootLat, StatRec) %>% 
       distinct()
-    nsites <- nrow(d3)# number of total survey sites
+    nsites <- nrow(d3)# number of total survey sites !!!!!!!!!!!!!!!! CHECK CORRECT
     
     # Survey sites where target species was caught
     d4 <- dyrly %>%
       select(ShootLong, ShootLat, StatRec) %>% 
       distinct()
-    nposhauls <- nrow(d4) # number of hauls with species presence
+    nposhauls <- nrow(d4) # number of hauls with species presence !!!!!!!!! CHECK CORRECT
     
     # Survey sites that did not catch target species
     d5 <- anti_join(d3,d4, by = join_by(ShootLong, ShootLat))
@@ -1343,9 +1386,11 @@ mapdis <- function(hlhh, yrs, qrs, species_aphia, stk_divs, ices_rect,  # data s
     
     
     # Density
-    if(density == TRUE){
-      z <- dyrly$TotalNo_Dur
-    } else{z <- rep(1, length(x))}
+    if (density == TRUE & matures == TRUE) {
+      z <- dyrly$TotalNoMature_Dur 
+    } else if (density == TRUE & matures == FALSE) {
+      z <- dyrly$TotalNo_Dur #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    } else {z <- rep(1, length(x))}
     
     # Measurement transformation
     if(km2lonlat){
@@ -1434,7 +1479,7 @@ mapdis <- function(hlhh, yrs, qrs, species_aphia, stk_divs, ices_rect,  # data s
     if(EOO == T){
       
       # Calculate the convex hull
-      convex_hull <- chull(coordinates)
+      convex_hull <- chull(coordinates) # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
       
       # Extract the convex hull points
       convex_hull_points <- as.data.frame(coordinates[convex_hull, ])
@@ -1547,7 +1592,7 @@ mapdis <- function(hlhh, yrs, qrs, species_aphia, stk_divs, ices_rect,  # data s
       
       #>>>>>>>>>> POPH >>>>>>>>>>#
       # Hauls with species presence (size weighted by density)
-      geom_point(data = d, aes(x = x, y = y, size = Density, colour = `Hauls (POPH)`)) +
+      geom_point(data = d, aes(x = x, y = y, size = Density, colour = `Hauls (POPH)`)) + #!!!!!!!!!!!!!! chekc Desnity and the df it beloongs to
       guides(shape = guide_legend(override.aes = list(fill = NA)),
              size = guide_legend(override.aes = list(fill = NA))) +      
       
