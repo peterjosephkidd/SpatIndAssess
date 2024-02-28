@@ -30,20 +30,7 @@ save.path <- "~/OneDrive - CEFAS/Projects/C8503B/PhD/SpatIndAssess(GIT)/SpatIndA
 refpts     <- read_xlsx(paste0(load.path, "icesSA_data/icesData-31stks-AY2022-stkdescrptn-optim.xlsx"))
 stksurveys <- read_xlsx(paste0(load.path, "icesSA_data/icesData-31stks-AY2022-stksurveys-optim.xlsx"), sheet = "Surveys")
 
-
-
-namefile <- function(stk = NA, data, f = NA, r = NA, ext = ".rds"){
-  if(is.na(f)){
-    f <- unique(data$Survey)
-  }
-  if(is.na(r)){
-    r <- unique(data$RecordType)
-  }
-  y <- paste0(min(data$Year), "-", max(data$Year))
-  q <- paste0("Q", unique(data$Quarter), collapse = ".")
-  n <- paste0(f,".Yr",y,".",q,".",r, "--", stk, ext)
-  return(n)
-}
+source("C:/Users/pk02/OneDrive - CEFAS/Projects/C8503B/PhD/SpatIndAssess(GIT)/SpatIndAssess/Functions/dataprep_funs.R")
 
 # Get L50 from FishBase
 Lmat <- data.frame()
@@ -72,19 +59,21 @@ refpts[!refpts$StockKeyLabel %in% Lmat$StockKeyLabel,]
 suppressWarnings(dir.create(paste0(load.path, "/FishBaseMaturity"), recursive = T))
 save(Lmat, file = paste0(load.path, "/FishBaseMaturity/", nrow(Lmat), "Stks-FishBase-L50.rds"))
 
-# Loop all
+# Method 1: Individual Stocks >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+load(paste0(save.path, "/stks.rds")) # saved stks from data_2_DownloadDATRAS
 stks <- Lmat$StockKeyLabel
-
-# Or one stock at a time
-stks <- "cod.27.47d20"
+stks <- "ank.27.78abd"
+method2 <- TRUE # method used in data_2_DownlaodDATRAS.R and data_3_CleanExchange.R
 
 # TotalNo Mature
 for(i in 1:length(stks)){
   stk <- stks[i]
-  message(stk)
+  message(paste0("\n", stk))
   
   stkLmat <- Lmat[Lmat$StockKeyLabel == stk,]
-  va <-  findAphia(stkLmat$SpeciesScientificName, latin = TRUE)
+  species <- stkLmat$SpeciesCommonName
+  species_aphia <-  findAphia(stkLmat$SpeciesScientificName, latin = TRUE)
+  L50 <- stkLmat$mu.sp
   
   srvys <- unique(stksurveys[stksurveys$StockKeyLabel == stk,]$SurveyAcronymn)
   
@@ -94,34 +83,28 @@ for(i in 1:length(stks)){
     srv <- srvys[j]
     message(srv)
     
-    files <- list.files(paste0(load.path, "SurveyData/", stk, "/clean/"), pattern = paste0("*", srv, "*"), full.names = T)
-    do.call(list, lapply(files, load, envir = .GlobalEnv))
+    if (method2 == TRUE){
+      files <- list.files(paste0(load.path, "SurveyData/all.stocks/clean/"), pattern = paste0("*", srv, "*"), full.names = T)
+    } else{
+      files <- list.files(paste0(load.path, "SurveyData/", stk, "/clean/"), pattern = paste0("*", srv, "*"), full.names = T)
+    }
     
-    hlhh$TrgtSpcs <- stkLmat$SpeciesCommonName
-    ca$TrgtSpcs   <- stkLmat$SpeciesCommonName
+    tryCatch({
+      do.call(list, lapply(files, load, envir = .GlobalEnv))
     
-    hlhh$TrgtSpcsL50 <- if_else(hlhh$Valid_Aphia == va, L50$mu.sp, NA)
-    ca$TrgtSpcsL50   <- if_else(ca$Valid_Aphia   == va, L50$mu.sp, NA)
-    
-    hlhh$TrgtSpcsMature <- if_else(hlhh$LngtClass >= hlhh$TrgtSpcsL50 & hlhh$Valid_Aphia == va, 1, if_else(hlhh$LngtClass < hlhh$TrgtSpcsL50 & hlhh$Valid_Aphia == va, 0, NA))
-    ca$TrgtSpcsMature   <- if_else(ca$LngtClass   >= ca$TrgtSpcsL50   & ca$Valid_Aphia   == va, 1, if_else(ca$LngtClass   < ca$TrgtSpcsL50   & ca$Valid_Aphia   == va, 0, NA))
-    
-    hlhh <- hlhh %>% 
-      group_by(haul.id, Valid_Aphia) %>%
-      mutate(TotalNoMature = sum(HLNoAtLngt[TrgtSpcsMature == 1]),
-             PropMature = TotalNoMature/TotalNo)
-    
-    save(hh,   file = paste0(save.path, stk, "/matures/", namefile(stk, hh)))
-    save(hl,   file = paste0(save.path, stk, "/matures/", namefile(stk, hl)))
-    save(ca,   file = paste0(save.path, stk, "/matures/", namefile(stk, ca)))
-    save(hlhh, file = paste0(save.path, stk, "/matures/", namefile(stk, hlhh, r = "HLHH")))
+      hlhh <- filter_to_matures(hlhh, species, species_aphia, L50, is.hlhh = TRUE)
+      ca   <- filter_to_matures(ca,   species, species_aphia, L50, is.hlhh = FALSE)
+      
+      save(hh,   file = paste0(save.path, stk, "/matures/", namefile(stk, hh)))
+      save(hl,   file = paste0(save.path, stk, "/matures/", namefile(stk, hl)))
+      save(ca,   file = paste0(save.path, stk, "/matures/", namefile(stk, ca)))
+      save(hlhh, file = paste0(save.path, stk, "/matures/", namefile(stk, hlhh, r = "HLHH")))
+    }, error = function(e){
+      message(paste0(stk, ": ", srv, " data not available."))
+    })
+    next
   }
 }
-
-
-
-
-
 
 
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
