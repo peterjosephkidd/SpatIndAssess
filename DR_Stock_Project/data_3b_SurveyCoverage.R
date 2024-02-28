@@ -16,8 +16,10 @@ stksurveys <- read_xlsx(paste0(load.path, "icesSA_data/icesData-31stks-AY2022-st
 load("~/OneDrive - CEFAS/Projects/C8503B/PhD/spatind-1/boot/initial/data/ices_shp/ICES Divs/ices_divs.rds")
 load("~/OneDrive - CEFAS/Projects/C8503B/PhD/spatind-1/boot/initial/data/ices_shp/ICES Rect/ices_rect.rds")
 
+
+load(paste0(load.path, "SurveyData/stks.rds")) # saved stks from data_2_DownloadDATRAS
 stks <- unique(stksurveys$StockKeyLabel)
-stks <- "cod.27.47d20"
+stks <- "ank.27.78abd"
 stksurveys$AvgSurveyCoverage <- rep(NA, nrow(stksurveys))
 
 srvys.coverage <- data.frame()
