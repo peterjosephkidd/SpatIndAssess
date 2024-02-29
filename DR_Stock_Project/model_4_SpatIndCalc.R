@@ -189,61 +189,15 @@ for(i in 1:length(stks)){
   }
 }
 
-
-
-
-
-
-
 View(spatinds)
+
+# Summary of data
+spatinds %>%
+  group_by(StockKeyLabel, SurveyName, SurveyIndex, Quarter, ValidAphia) %>%
+  summarise(YrRange = paste0(range(Year), collapse = "-"),
+            N.Data = sum(n, na.rm = T)) %>%
+  arrange(Quarter, SurveyName, StockKeyLabel) %>%
+  print(n = nrow(.))
+
 suppressWarnings(dir.create(paste0(save.path, "Outputs/SpatInds"), recursive = TRUE))
 save(spatinds, file = paste0(save.path, "Outputs/SpatInds/SpatialIndicators-", length(unique(spatinds$StockKeyLabel)), "-Stks.rds"))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Merge all outputs into a single df
-sidf <- Reduce(function(x, y) merge(x, y, all=TRUE), df_list) %>%
-  select(-c(nrects, nrects_p, no_haul.ids, pr_hauls)) %>% # remove some cols
-  rename(EOO = convex_hull_area,
-         POPR = PosAreaR,
-         POPH = PosAreaH,
-         ELA = `Ellipse Area`,
-         SPI = SPI.dur,
-         SA = `Spreading Area`,
-         EA = `Equivalent Area`) %>%
-  na.omit() %>%
-  tidyr::pivot_longer(cols = 3:14, names_to = "Indicator", values_to = "Value") %>%
-  mutate(Type = case_when(
-    Indicator %in% loc  ~ "Location",
-    Indicator %in% ran  ~ "Range",
-    Indicator %in% occ  ~ "Occupancy",
-    Indicator %in% agg  ~ "Aggregation")) %>%
-  mutate(Indicator = factor(Indicator, levels = c(loc, ran, occ, agg)))
-
-ttl <- function(species, stk_divs, srv, qrs, yrs){
-  paste0(species[1], " (", species[2], ") in ", paste0(stk_divs, collapse = ", "), "\n", srv, " (Q", qrs, ") ", min(yrs), " - ", max(yrs))}
-
-indplot <- ggplot(data = sidf, aes(x = Year, y = Value)) +
-  geom_line(aes(colour = Type)) +
-  scale_x_continuous(breaks = seq(from = min(unique(sidf$Year)), to = max(unique(sidf$Year)), by = 2)) +
-  facet_wrap(vars(Indicator), scales = "free") +
-  theme_minimal() +
-  theme(
-    panel.border = element_rect(colour = "black", fill = NA),
-    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 6)
-  ) +
-  labs(title = "Spatial Indicator Timeseries",
-       subtitle = ttl(species = stk, stk_divs, srv, qrs, yrs)) +
-  ylab("Indicator Value")
-indplot
